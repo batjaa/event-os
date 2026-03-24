@@ -4,6 +4,15 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Calendar,
   Plus,
@@ -11,6 +20,7 @@ import {
   Clock,
   Eye,
   Pencil,
+  X,
 } from "lucide-react";
 
 type SessionType = "talk" | "workshop" | "keynote" | "break" | "panel" | "networking";
@@ -47,9 +57,37 @@ type Session = {
 
 export function AgendaClient({ initialSessions }: { initialSessions: Session[] }) {
   const [selectedDay, setSelectedDay] = useState(1);
-  const [agendaStatus, setAgendaStatus] = useState<"draft" | "published">(
-    "draft"
-  );
+  const [agendaStatus, setAgendaStatus] = useState<"draft" | "published">("draft");
+  const [showForm, setShowForm] = useState(false);
+
+  const handleAddSession = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const data = Object.fromEntries(form);
+
+    const startTime = data.date && data.startTime
+      ? new Date(`${data.date}T${data.startTime}:00`).toISOString()
+      : null;
+    const endTime = data.date && data.endTime
+      ? new Date(`${data.date}T${data.endTime}:00`).toISOString()
+      : null;
+
+    await fetch("/api/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: data.title,
+        type: data.type || "talk",
+        startTime,
+        endTime,
+        day: parseInt(data.day as string) || selectedDay,
+        room: data.room || null,
+      }),
+    });
+
+    setShowForm(false);
+    window.location.reload();
+  };
 
   const sessions = initialSessions;
   const daySessions = sessions.filter((s) => s.day === selectedDay);
@@ -131,11 +169,70 @@ export function AgendaClient({ initialSessions }: { initialSessions: Session[] }
             <Eye className="mr-2 h-3 w-3" />
             {agendaStatus === "draft" ? "Publish" : "Unpublish"}
           </Button>
-          <Button size="sm">
-            <Plus className="mr-2 h-3 w-3" /> Add Session
+          <Button size="sm" onClick={() => setShowForm(!showForm)}>
+            {showForm ? <><X className="mr-2 h-3 w-3" /> Cancel</> : <><Plus className="mr-2 h-3 w-3" /> Add Session</>}
           </Button>
         </div>
       </div>
+
+      {/* Add session form */}
+      {showForm && (
+        <Card className="mb-4">
+          <CardContent className="p-4">
+            <form onSubmit={handleAddSession} className="space-y-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Title *</Label>
+                  <Input name="title" placeholder="e.g., Opening Keynote" required />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Type</Label>
+                  <Select name="type" defaultValue="talk">
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="talk">Talk</SelectItem>
+                      <SelectItem value="keynote">Keynote</SelectItem>
+                      <SelectItem value="workshop">Workshop</SelectItem>
+                      <SelectItem value="panel">Panel</SelectItem>
+                      <SelectItem value="break">Break</SelectItem>
+                      <SelectItem value="networking">Networking</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="space-y-1.5">
+                  <Label>Day</Label>
+                  <Select name="day" defaultValue={String(selectedDay)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">Day 1</SelectItem>
+                      <SelectItem value="2">Day 2</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Date</Label>
+                  <Input name="date" type="date" defaultValue="2026-03-28" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Start</Label>
+                  <Input name="startTime" type="time" defaultValue="09:00" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>End</Label>
+                  <Input name="endTime" type="time" defaultValue="09:45" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Room</Label>
+                <Input name="room" placeholder="e.g., Main Stage" />
+              </div>
+              <Button type="submit" className="w-full sm:w-auto">Add Session</Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Day tabs */}
       <div className="flex gap-2 mb-4">

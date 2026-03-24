@@ -23,6 +23,15 @@ export async function getApiContext(
     return { organizationId: orgId, source: "api" };
   }
 
+  // In development, fall back to active edition for unauthenticated requests
+  if (process.env.NODE_ENV === "development") {
+    const { getActiveIds } = await import("@/lib/queries");
+    const ids = await getActiveIds();
+    if (ids) {
+      return { organizationId: ids.orgId, source: "web" as const };
+    }
+  }
+
   // Fall back to session auth (for web app)
   const session = await auth();
   if (!session?.user) {
