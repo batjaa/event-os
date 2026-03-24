@@ -1,0 +1,80 @@
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/db";
+import { speakerApplications, eventQueue } from "@/db/schema";
+import { eq, and, desc } from "drizzle-orm";
+import { getApiContext, paginationParams } from "@/lib/api-utils";
+
+export async function GET(req: NextRequest) {
+  const ctx = await getApiContext(req);
+  if (ctx instanceof NextResponse) return ctx;
+
+  const url = new URL(req.url);
+  const editionId = url.searchParams.get("editionId");
+  const status = url.searchParams.get("status");
+  const { limit } = paginationParams(req);
+
+  if (!editionId) {
+    return NextResponse.json(
+      { error: "editionId is required" },
+      { status: 400 }
+    );
+  }
+
+  const conditions = [
+    eq(speakerApplications.editionId, editionId),
+    eq(speakerApplications.organizationId, ctx.organizationId),
+  ];
+
+  if (status) {
+    conditions.push(
+      eq(speakerApplications.status, status as "pending" | "accepted" | "rejected" | "waitlisted")
+    );
+  }
+
+  const speakers = await db.query.speakerApplications.findMany({
+    where: and(...conditions),
+    orderBy: desc(speakerApplications.createdAt),
+    limit,
+  });
+
+  return NextResponse.json({ data: speakers });
+}
+
+export async function POST(req: NextRequest) {
+  // CFP submissions are public — no auth required
+  const body = await req.json();
+  const { editionId, organizationId, name, email, bio, company, title, talkTitle, talkAbstract, talkType, trackPreference } = body;
+
+  if (!editionId || !organizationId || !name || !email || !talkTitle) {
+    return NextResponse.json(
+      { error: "Missing required fields: editionId, organizationId, name, email, talkTitle" },
+      { status: 400 }
+    );
+  }
+
+  const [speaker] = await db
+    .insert(speakerApplications)
+    .values({
+      editionId,
+      organizationId,
+      name,
+      email,
+      bio: bio || null,
+      company: company || null,
+      title: title || null,
+      talkTitle,
+      talkAbstract: talkAbstract || null,
+      talkType: talkType || "talk",
+      trackPreference: trackPreference || null,
+    })
+    .returning();
+
+  // Queue event for OpenClaw agent
+  await db.insert(eventQueue).values({
+    organizationId,
+    eventType: "speaker_application_submitted",
+    payload: { speakerId: speaker.id, editionId },
+  });
+
+  return NextResponse.json({ data: speaker }, { status: 201 });
+}

@@ -1,0 +1,92 @@
+import { Card, CardContent } from "@/components/ui/card";
+import { Calendar, Mic2, Users, ScanLine } from "lucide-react";
+
+export default function DashboardPage() {
+  return (
+    <div>
+      <div className="mb-6">
+        <h1 className="font-heading text-2xl font-bold tracking-tight">
+          Dashboard
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Dev Summit 2026 — March 28-29, Ulaanbaatar
+        </p>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-4 gap-4 mb-8">
+        {[
+          { label: "Sessions", value: "—", icon: Calendar },
+          { label: "Speakers", value: "—", icon: Mic2 },
+          { label: "Attendees", value: "—", icon: Users },
+          { label: "Checked In", value: "—", icon: ScanLine },
+        ].map((stat) => (
+          <Card key={stat.label}>
+            <CardContent className="flex items-center gap-4 p-4">
+              <div className="rounded-md bg-yellow-500/10 p-2">
+                <stat.icon className="h-5 w-5 text-yellow-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-semibold tabular-nums">
+                  {stat.value}
+                </p>
+                <p className="text-xs text-muted-foreground">{stat.label}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Getting started guide */}
+      <Card>
+        <CardContent className="p-6">
+          <h2 className="font-heading text-lg font-semibold mb-4">
+            Get started
+          </h2>
+          <div className="space-y-3">
+            {[
+              {
+                step: 1,
+                text: "Create your CFP link and share it with potential speakers",
+                done: false,
+              },
+              {
+                step: 2,
+                text: "Import your schedule or add sessions manually",
+                done: false,
+              },
+              {
+                step: 3,
+                text: "Connect your Telegram group for agent notifications",
+                done: false,
+              },
+              {
+                step: 4,
+                text: "Add attendees and generate QR tickets",
+                done: false,
+              },
+            ].map((item) => (
+              <div
+                key={item.step}
+                className="flex items-center gap-3 text-sm"
+              >
+                <span
+                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium ${
+                    item.done
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-stone-100 text-stone-500"
+                  }`}
+                >
+                  {item.step}
+                </span>
+                <span className={item.done ? "text-muted-foreground line-through" : ""}>
+                  {item.text}
+                </span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
