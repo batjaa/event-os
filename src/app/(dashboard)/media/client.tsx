@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,13 +13,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PipelineFilters, StageBadge, SourceBadge, usePipelineFilters } from "@/components/pipeline-view";
+import { PipelineFilters, usePipelineFilters } from "@/components/pipeline-view";
+import { PipelineTable } from "@/components/pipeline-table";
 import { Plus, X } from "lucide-react";
 
 type MediaPartner = {
   id: string;
   companyName: string;
   contactName: string;
+  contactEmail: string;
   type: string | null;
   reach: string | null;
   status: string;
@@ -32,24 +33,81 @@ type MediaPartner = {
 
 export function MediaClient({ initialPartners }: { initialPartners: MediaPartner[] }) {
   const { source, stage, setSource, setStage, filter } = usePipelineFilters();
+  const [partners, setPartners] = useState(initialPartners);
   const [showForm, setShowForm] = useState(false);
 
-  const partners = initialPartners;
   const filtered = filter(partners);
+
+  const columns = [
+    {
+      key: "companyName",
+      label: "Company",
+      width: "160px",
+      render: (p: MediaPartner) => (
+        <p className="font-medium text-sm">{p.companyName}</p>
+      ),
+    },
+    {
+      key: "contactName",
+      label: "Contact",
+      width: "140px",
+      render: (p: MediaPartner) => (
+        <span className="text-xs text-muted-foreground">{p.contactName || "—"}</span>
+      ),
+    },
+    {
+      key: "contactEmail",
+      label: "Email",
+      width: "180px",
+      render: (p: MediaPartner) => (
+        <span className="text-xs text-muted-foreground">{p.contactEmail || "—"}</span>
+      ),
+    },
+    {
+      key: "type",
+      label: "Type",
+      width: "80px",
+      render: (p: MediaPartner) => (
+        <span className="text-xs capitalize">{p.type || "—"}</span>
+      ),
+    },
+    {
+      key: "reach",
+      label: "Reach",
+      width: "140px",
+      render: (p: MediaPartner) => (
+        <span className="text-xs text-muted-foreground">{p.reach || "—"}</span>
+      ),
+    },
+  ];
+
+  // Refresh data without full page reload
+  const refreshData = useCallback(async () => {
+    const res = await fetch("/api/media-partners");
+    if (res.ok) {
+      const json = await res.json();
+      if (json.data) setPartners(json.data);
+    } else {
+      window.location.reload();
+    }
+  }, []);
 
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     const data = Object.fromEntries(form);
 
-    await fetch("/api/media-partners", {
+    const res = await fetch("/api/media-partners", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
 
-    setShowForm(false);
-    window.location.reload();
+    if (res.ok) {
+      const json = await res.json();
+      setPartners((prev) => [json.data, ...prev]);
+      setShowForm(false);
+    }
   };
 
   return (
@@ -136,40 +194,18 @@ export function MediaClient({ initialPartners }: { initialPartners: MediaPartner
         onStageChange={setStage}
       />
 
-      <div className="space-y-2">
-        {filtered.map((partner) => (
-          <Card key={partner.id} className="hover:border-yellow-500/30 transition-colors">
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium">{partner.companyName}</p>
-                    <StageBadge stage={partner.stage} />
-                    <SourceBadge source={partner.source} />
-                    {partner.type && <Badge variant="outline" className="text-[10px]">{partner.type}</Badge>}
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-0.5">{partner.contactName} &middot; {partner.reach}</p>
-                  <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                    {partner.assignedTo && (
-                      <span className="text-yellow-600">Assigned: {partner.assignedTo}</span>
-                    )}
-                    {partner.deliverables && <span>{partner.deliverables}</span>}
-                  </div>
-                </div>
-              </div>
-              {partner.stage === "lead" && (
-                <div className="flex gap-2 mt-3 sm:justify-end">
-                  <Button size="sm" variant="outline" className="flex-1 sm:flex-none">Decline</Button>
-                  <Button size="sm" className="flex-1 sm:flex-none">Confirm</Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-        {filtered.length === 0 && (
-          <p className="text-center text-sm text-muted-foreground py-8">No media partners match the current filters.</p>
-        )}
-      </div>
+      {/* Table view */}
+      <PipelineTable
+        items={filtered}
+        columns={columns}
+        entityName="media partner"
+        apiEndpoint="/api/media-partners"
+        onUpdate={refreshData}
+      />
+
+      {filtered.length === 0 && partners.length > 0 && (
+        <p className="text-center text-sm text-muted-foreground py-8">No media partners match the current filters.</p>
+      )}
     </div>
   );
 }

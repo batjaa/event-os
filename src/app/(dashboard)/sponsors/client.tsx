@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PipelineFilters, StageBadge, SourceBadge, usePipelineFilters } from "@/components/pipeline-view";
+import { PipelineFilters, usePipelineFilters } from "@/components/pipeline-view";
+import { PipelineTable } from "@/components/pipeline-table";
 import { Building2, Plus, X } from "lucide-react";
 
 type Sponsor = {
@@ -33,24 +33,81 @@ type Sponsor = {
 
 export function SponsorsClient({ initialSponsors }: { initialSponsors: Sponsor[] }) {
   const { source, stage, setSource, setStage, filter } = usePipelineFilters();
+  const [sponsors, setSponsors] = useState(initialSponsors);
   const [showForm, setShowForm] = useState(false);
-  const sponsors = initialSponsors;
 
   const filtered = filter(sponsors);
+
+  const columns = [
+    {
+      key: "companyName",
+      label: "Company Name",
+      width: "180px",
+      render: (s: Sponsor) => (
+        <p className="font-medium text-sm">{s.companyName}</p>
+      ),
+    },
+    {
+      key: "contactName",
+      label: "Contact",
+      width: "140px",
+      render: (s: Sponsor) => (
+        <span className="text-xs text-muted-foreground">{s.contactName || "—"}</span>
+      ),
+    },
+    {
+      key: "contactEmail",
+      label: "Email",
+      width: "180px",
+      render: (s: Sponsor) => (
+        <span className="text-xs text-muted-foreground">{s.contactEmail || "—"}</span>
+      ),
+    },
+    {
+      key: "packagePreference",
+      label: "Package",
+      width: "100px",
+      render: (s: Sponsor) => (
+        <span className="text-xs capitalize">{s.packagePreference || "—"}</span>
+      ),
+    },
+    {
+      key: "status",
+      label: "Status",
+      width: "90px",
+      render: (s: Sponsor) => (
+        <span className="text-xs">{s.status}</span>
+      ),
+    },
+  ];
+
+  // Refresh data without full page reload
+  const refreshData = useCallback(async () => {
+    const res = await fetch("/api/sponsors");
+    if (res.ok) {
+      const json = await res.json();
+      if (json.data) setSponsors(json.data);
+    } else {
+      window.location.reload();
+    }
+  }, []);
 
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     const data = Object.fromEntries(form);
 
-    await fetch("/api/sponsors", {
+    const res = await fetch("/api/sponsors", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
 
-    setShowForm(false);
-    window.location.reload();
+    if (res.ok) {
+      const json = await res.json();
+      setSponsors((prev) => [json.data, ...prev]);
+      setShowForm(false);
+    }
   };
 
   return (
@@ -133,7 +190,7 @@ export function SponsorsClient({ initialSponsors }: { initialSponsors: Sponsor[]
         onStageChange={setStage}
       />
 
-      {/* Sponsor list */}
+      {/* Table view */}
       {sponsors.length === 0 && !showForm ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
@@ -148,40 +205,17 @@ export function SponsorsClient({ initialSponsors }: { initialSponsors: Sponsor[]
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-2">
-          {filtered.map((sponsor) => (
-            <Card key={sponsor.id} className="hover:border-yellow-500/30 transition-colors">
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium">{sponsor.companyName}</p>
-                      <StageBadge stage={sponsor.stage} />
-                      <SourceBadge source={sponsor.source} />
-                      {sponsor.packagePreference && (
-                        <Badge variant="outline" className="text-[10px] capitalize">
-                          {sponsor.packagePreference}
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-0.5">
-                      {sponsor.contactName} &middot; {sponsor.contactEmail}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                      {sponsor.assignedTo && (
-                        <span className="text-yellow-600">Assigned: {sponsor.assignedTo}</span>
-                      )}
-                      {sponsor.message && <span>{sponsor.message}</span>}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-          {filtered.length === 0 && (
-            <p className="text-center text-sm text-muted-foreground py-8">No sponsors match the current filters.</p>
-          )}
-        </div>
+        <PipelineTable
+          items={filtered}
+          columns={columns}
+          entityName="sponsor"
+          apiEndpoint="/api/sponsors"
+          onUpdate={refreshData}
+        />
+      )}
+
+      {filtered.length === 0 && sponsors.length > 0 && (
+        <p className="text-center text-sm text-muted-foreground py-8">No sponsors match the current filters.</p>
       )}
     </div>
   );

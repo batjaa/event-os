@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PipelineFilters, StageBadge, SourceBadge, usePipelineFilters } from "@/components/pipeline-view";
+import { PipelineFilters, usePipelineFilters } from "@/components/pipeline-view";
+import { PipelineTable } from "@/components/pipeline-table";
 import { Copy, Check, Plus, X } from "lucide-react";
 
 type Volunteer = {
@@ -31,11 +32,54 @@ type Volunteer = {
 
 export function VolunteersClient({ initialVolunteers }: { initialVolunteers: Volunteer[] }) {
   const { source, stage, setSource, setStage, filter } = usePipelineFilters();
+  const [volunteers, setVolunteers] = useState(initialVolunteers);
   const [copied, setCopied] = useState(false);
   const [showForm, setShowForm] = useState(false);
 
-  const volunteers = initialVolunteers;
   const filtered = filter(volunteers);
+
+  const columns = [
+    {
+      key: "name",
+      label: "Name",
+      width: "160px",
+      render: (v: Volunteer) => (
+        <p className="font-medium text-sm">{v.name}</p>
+      ),
+    },
+    {
+      key: "email",
+      label: "Email",
+      width: "180px",
+      render: (v: Volunteer) => (
+        <span className="text-xs text-muted-foreground">{v.email || "—"}</span>
+      ),
+    },
+    {
+      key: "role",
+      label: "Role",
+      width: "140px",
+      render: (v: Volunteer) => (
+        <span className="text-xs">{v.role || "—"}</span>
+      ),
+    },
+    {
+      key: "availability",
+      label: "Availability",
+      width: "140px",
+      render: (v: Volunteer) => (
+        <span className="text-xs text-muted-foreground">{v.availability || "—"}</span>
+      ),
+    },
+    {
+      key: "tshirtSize",
+      label: "T-Shirt",
+      width: "70px",
+      render: (v: Volunteer) => (
+        <span className="text-xs font-medium">{v.tshirtSize || "—"}</span>
+      ),
+    },
+  ];
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(`${window.location.origin}/volunteer/dev-summit-2026`);
@@ -43,19 +87,33 @@ export function VolunteersClient({ initialVolunteers }: { initialVolunteers: Vol
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Refresh data without full page reload
+  const refreshData = useCallback(async () => {
+    const res = await fetch("/api/volunteers");
+    if (res.ok) {
+      const json = await res.json();
+      if (json.data) setVolunteers(json.data);
+    } else {
+      window.location.reload();
+    }
+  }, []);
+
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     const data = Object.fromEntries(form);
 
-    await fetch("/api/volunteers", {
+    const res = await fetch("/api/volunteers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
 
-    setShowForm(false);
-    window.location.reload();
+    if (res.ok) {
+      const json = await res.json();
+      setVolunteers((prev) => [json.data, ...prev]);
+      setShowForm(false);
+    }
   };
 
   return (
@@ -150,45 +208,18 @@ export function VolunteersClient({ initialVolunteers }: { initialVolunteers: Vol
         onStageChange={setStage}
       />
 
-      <div className="space-y-2">
-        {filtered.map((vol) => (
-          <Card key={vol.id} className="hover:border-yellow-500/30 transition-colors">
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium">{vol.name}</p>
-                    <StageBadge stage={vol.stage} />
-                    <SourceBadge source={vol.source} />
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-0.5">{vol.role} &middot; {vol.availability}</p>
-                  <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                    {vol.assignedTo && (
-                      <span className="text-yellow-600">Assigned: {vol.assignedTo}</span>
-                    )}
-                    {vol.assignedShift && (
-                      <span className="text-emerald-600">Shift: {vol.assignedShift}</span>
-                    )}
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-xs text-muted-foreground">T-shirt</p>
-                  <p className="text-sm font-medium">{vol.tshirtSize}</p>
-                </div>
-              </div>
-              {vol.stage === "lead" && (
-                <div className="flex gap-2 mt-3 sm:justify-end">
-                  <Button size="sm" variant="outline" className="flex-1 sm:flex-none">Decline</Button>
-                  <Button size="sm" className="flex-1 sm:flex-none">Accept</Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-        {filtered.length === 0 && (
-          <p className="text-center text-sm text-muted-foreground py-8">No volunteers match the current filters.</p>
-        )}
-      </div>
+      {/* Table view */}
+      <PipelineTable
+        items={filtered}
+        columns={columns}
+        entityName="volunteer"
+        apiEndpoint="/api/volunteers"
+        onUpdate={refreshData}
+      />
+
+      {filtered.length === 0 && volunteers.length > 0 && (
+        <p className="text-center text-sm text-muted-foreground py-8">No volunteers match the current filters.</p>
+      )}
     </div>
   );
 }

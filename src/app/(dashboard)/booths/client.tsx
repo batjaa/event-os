@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PipelineFilters, StageBadge, SourceBadge, usePipelineFilters } from "@/components/pipeline-view";
+import { PipelineFilters, usePipelineFilters } from "@/components/pipeline-view";
+import { PipelineTable } from "@/components/pipeline-table";
 import { Plus, X } from "lucide-react";
 
 type Booth = {
@@ -31,24 +32,80 @@ type Booth = {
 
 export function BoothsClient({ initialBooths }: { initialBooths: Booth[] }) {
   const { source, stage, setSource, setStage, filter } = usePipelineFilters();
+  const [booths, setBooths] = useState(initialBooths);
   const [showForm, setShowForm] = useState(false);
 
-  const booths = initialBooths;
   const filtered = filter(booths);
+
+  const columns = [
+    {
+      key: "name",
+      label: "Name",
+      width: "140px",
+      render: (b: Booth) => (
+        <p className="font-medium text-sm">{b.name}</p>
+      ),
+    },
+    {
+      key: "location",
+      label: "Location",
+      width: "140px",
+      render: (b: Booth) => (
+        <span className="text-xs text-muted-foreground">{b.location || "—"}</span>
+      ),
+    },
+    {
+      key: "size",
+      label: "Size",
+      width: "90px",
+      render: (b: Booth) => (
+        <span className="text-xs capitalize">{b.size || "—"}</span>
+      ),
+    },
+    {
+      key: "equipment",
+      label: "Equipment",
+      render: (b: Booth) => (
+        <span className="text-xs text-muted-foreground">{b.equipment || "—"}</span>
+      ),
+    },
+    {
+      key: "status",
+      label: "Status",
+      width: "90px",
+      render: (b: Booth) => (
+        <span className="text-xs">{b.status}</span>
+      ),
+    },
+  ];
+
+  // Refresh data without full page reload
+  const refreshData = useCallback(async () => {
+    const res = await fetch("/api/booths");
+    if (res.ok) {
+      const json = await res.json();
+      if (json.data) setBooths(json.data);
+    } else {
+      window.location.reload();
+    }
+  }, []);
 
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     const data = Object.fromEntries(form);
 
-    await fetch("/api/booths", {
+    const res = await fetch("/api/booths", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
 
-    setShowForm(false);
-    window.location.reload();
+    if (res.ok) {
+      const json = await res.json();
+      setBooths((prev) => [json.data, ...prev]);
+      setShowForm(false);
+    }
   };
 
   return (
@@ -130,53 +187,18 @@ export function BoothsClient({ initialBooths }: { initialBooths: Booth[] }) {
         onStageChange={setStage}
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {filtered.map((booth) => (
-          <Card key={booth.id} className="hover:border-yellow-500/30 transition-colors">
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <p className="font-medium">{booth.name}</p>
-                  <p className="text-xs text-muted-foreground">{booth.location}</p>
-                </div>
-                <StageBadge stage={booth.stage} />
-              </div>
-              <div className="flex flex-wrap items-center gap-1 mb-2">
-                <SourceBadge source={booth.source} />
-              </div>
-              <div className="space-y-1.5 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Size</span>
-                  <span className="font-medium">{booth.size}</span>
-                </div>
-                {booth.sponsorId && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Sponsor</span>
-                    <span className="font-medium">Assigned</span>
-                  </div>
-                )}
-                {booth.assignedTo && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Assigned</span>
-                    <span className="font-medium text-yellow-600">{booth.assignedTo}</span>
-                  </div>
-                )}
-                {booth.equipment && (
-                  <div className="text-xs text-muted-foreground pt-1 border-t">
-                    {booth.equipment}
-                  </div>
-                )}
-              </div>
-              {booth.stage === "lead" && (
-                <Button size="sm" variant="outline" className="w-full mt-3">Reserve</Button>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-        {filtered.length === 0 && (
-          <p className="text-center text-sm text-muted-foreground py-8 col-span-full">No booths match the current filters.</p>
-        )}
-      </div>
+      {/* Table view */}
+      <PipelineTable
+        items={filtered}
+        columns={columns}
+        entityName="booth"
+        apiEndpoint="/api/booths"
+        onUpdate={refreshData}
+      />
+
+      {filtered.length === 0 && booths.length > 0 && (
+        <p className="text-center text-sm text-muted-foreground py-8">No booths match the current filters.</p>
+      )}
     </div>
   );
 }

@@ -1,18 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { PipelineFilters, StageBadge, SourceBadge, usePipelineFilters } from "@/components/pipeline-view";
+import { PipelineFilters, usePipelineFilters } from "@/components/pipeline-view";
+import { PipelineTable } from "@/components/pipeline-table";
 import {
   Users,
   Upload,
   Search,
   CheckCircle2,
-  QrCode,
   X,
   Loader2,
 } from "lucide-react";
@@ -45,14 +45,13 @@ export function AttendeesClient({
   stats: Stats;
 }) {
   const { source, stage, setSource, setStage, filter: pipelineFilter } = usePipelineFilters();
+  const [attendees, setAttendees] = useState(initialAttendees);
   const [search, setSearch] = useState("");
   const [showImport, setShowImport] = useState(false);
   const [csvText, setCsvText] = useState("");
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
   const [checkInFilter, setCheckInFilter] = useState<"all" | "checked_in" | "not_checked_in">("all");
-
-  const attendees = initialAttendees;
 
   const filtered = pipelineFilter(attendees)
     .filter((a) => {
@@ -65,6 +64,60 @@ export function AttendeesClient({
         a.name.toLowerCase().includes(search.toLowerCase()) ||
         a.email.toLowerCase().includes(search.toLowerCase())
     );
+
+  const columns = [
+    {
+      key: "name",
+      label: "Name",
+      width: "160px",
+      render: (a: Attendee) => (
+        <p className="font-medium text-sm">{a.name}</p>
+      ),
+    },
+    {
+      key: "email",
+      label: "Email",
+      width: "200px",
+      render: (a: Attendee) => (
+        <span className="text-xs text-muted-foreground">{a.email || "—"}</span>
+      ),
+    },
+    {
+      key: "ticketType",
+      label: "Ticket Type",
+      width: "110px",
+      render: (a: Attendee) => (
+        <Badge variant="outline" className="text-[10px]">{a.ticketType}</Badge>
+      ),
+    },
+    {
+      key: "checkedIn",
+      label: "Check-in Status",
+      width: "130px",
+      render: (a: Attendee) =>
+        a.checkedIn ? (
+          <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">
+            <CheckCircle2 className="mr-1 h-3 w-3" />
+            {a.checkedInAt
+              ? new Date(a.checkedInAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+              : "Checked in"}
+          </Badge>
+        ) : (
+          <span className="text-xs text-muted-foreground">Not checked in</span>
+        ),
+    },
+  ];
+
+  // Refresh data without full page reload
+  const refreshData = useCallback(async () => {
+    const res = await fetch("/api/attendees?editionId=all");
+    if (res.ok) {
+      const json = await res.json();
+      if (json.data) setAttendees(json.data);
+    } else {
+      window.location.reload();
+    }
+  }, []);
 
   const handleImport = async () => {
     if (!csvText.trim()) return;
@@ -105,7 +158,7 @@ export function AttendeesClient({
       setImportResult(data.message);
 
       if (res.ok) {
-        setTimeout(() => window.location.reload(), 2000);
+        setTimeout(() => refreshData(), 2000);
       }
     } catch {
       setImportResult("Import failed. Please try again.");
@@ -199,7 +252,7 @@ export function AttendeesClient({
         ))}
       </div>
 
-      {/* Attendee list */}
+      {/* Table view */}
       {attendees.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
@@ -214,42 +267,19 @@ export function AttendeesClient({
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-1">
-          {filtered.map((attendee) => (
-            <div
-              key={attendee.id}
-              className="flex items-center justify-between rounded-md border px-4 py-3 hover:bg-accent/50 transition-colors"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="text-sm font-medium truncate">{attendee.name}</span>
-                <span className="text-xs text-muted-foreground truncate hidden sm:inline">{attendee.email}</span>
-                <StageBadge stage={attendee.stage} />
-                <SourceBadge source={attendee.source} />
-                <Badge variant="outline" className="text-[10px] shrink-0">{attendee.ticketType}</Badge>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button className="text-stone-400 hover:text-stone-600" title="Show QR code">
-                  <QrCode className="h-4 w-4" />
-                </button>
-                {attendee.checkedIn ? (
-                  <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">
-                    <CheckCircle2 className="mr-1 h-3 w-3" />
-                    {attendee.checkedInAt
-                      ? new Date(attendee.checkedInAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                      : "Checked in"}
-                  </Badge>
-                ) : (
-                  <span className="text-xs text-muted-foreground">Not checked in</span>
-                )}
-              </div>
-            </div>
-          ))}
-          {filtered.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              No attendees match your search.
-            </p>
-          )}
-        </div>
+        <PipelineTable
+          items={filtered}
+          columns={columns}
+          entityName="attendee"
+          apiEndpoint="/api/attendees"
+          onUpdate={refreshData}
+        />
+      )}
+
+      {filtered.length === 0 && attendees.length > 0 && (
+        <p className="text-sm text-muted-foreground text-center py-8">
+          No attendees match your search.
+        </p>
       )}
     </div>
   );

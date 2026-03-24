@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,8 +14,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PipelineFilters, StageBadge, SourceBadge, usePipelineFilters } from "@/components/pipeline-view";
-import { Plus, Star, Check, X } from "lucide-react";
+import { PipelineFilters, usePipelineFilters } from "@/components/pipeline-view";
+import { PipelineTable } from "@/components/pipeline-table";
+import { Plus, Check, X } from "lucide-react";
 
 type Venue = {
   id: string;
@@ -35,24 +36,81 @@ type Venue = {
 
 export function VenueClient({ initialVenues }: { initialVenues: Venue[] }) {
   const { source, stage, setSource, setStage, filter } = usePipelineFilters();
+  const [venues, setVenues] = useState(initialVenues);
   const [showForm, setShowForm] = useState(false);
-  const finalized = initialVenues.find((v) => v.isFinalized);
-  const venues = initialVenues;
+  const finalized = venues.find((v) => v.isFinalized);
   const filtered = filter(venues).filter((v) => !v.isFinalized);
+
+  const columns = [
+    {
+      key: "name",
+      label: "Name",
+      width: "160px",
+      render: (v: Venue) => (
+        <p className="font-medium text-sm">{v.name}</p>
+      ),
+    },
+    {
+      key: "address",
+      label: "Address",
+      width: "180px",
+      render: (v: Venue) => (
+        <span className="text-xs text-muted-foreground">{v.address || "—"}</span>
+      ),
+    },
+    {
+      key: "contactName",
+      label: "Contact",
+      width: "130px",
+      render: (v: Venue) => (
+        <span className="text-xs text-muted-foreground">{v.contactName || "—"}</span>
+      ),
+    },
+    {
+      key: "capacity",
+      label: "Capacity",
+      width: "80px",
+      render: (v: Venue) => (
+        <span className="text-xs font-medium">{v.capacity ?? "—"}</span>
+      ),
+    },
+    {
+      key: "priceQuote",
+      label: "Price Quote",
+      width: "110px",
+      render: (v: Venue) => (
+        <span className="text-xs text-muted-foreground">{v.priceQuote || "—"}</span>
+      ),
+    },
+  ];
+
+  // Refresh data without full page reload
+  const refreshData = useCallback(async () => {
+    const res = await fetch("/api/venues");
+    if (res.ok) {
+      const json = await res.json();
+      if (json.data) setVenues(json.data);
+    } else {
+      window.location.reload();
+    }
+  }, []);
 
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     const data = Object.fromEntries(form);
 
-    await fetch("/api/venues", {
+    const res = await fetch("/api/venues", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
 
-    setShowForm(false);
-    window.location.reload();
+    if (res.ok) {
+      const json = await res.json();
+      setVenues((prev) => [json.data, ...prev]);
+      setShowForm(false);
+    }
   };
 
   return (
@@ -166,53 +224,18 @@ export function VenueClient({ initialVenues }: { initialVenues: Venue[] }) {
         onStageChange={setStage}
       />
 
-      {/* Venue cards */}
-      <div className="space-y-3">
-        {filtered.map((venue) => (
-          <Card key={venue.id} className="hover:border-yellow-500/30 transition-colors">
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium">{venue.name}</p>
-                    <StageBadge stage={venue.stage} />
-                    <SourceBadge source={venue.source} />
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-0.5">{venue.address}</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Capacity:</span>{" "}
-                      <span className="font-medium">{venue.capacity}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Contact:</span>{" "}
-                      <span className="font-medium">{venue.contactName}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Assigned:</span>{" "}
-                      <span className="font-medium text-yellow-600">{venue.assignedTo}</span>
-                    </div>
-                  </div>
-                  <p className="text-sm mt-1"><span className="text-muted-foreground">Quote:</span> {venue.priceQuote}</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 text-xs">
-                    {venue.pros && <div className="text-emerald-600">+ {venue.pros}</div>}
-                    {venue.cons && <div className="text-red-600">- {venue.cons}</div>}
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-2 mt-3 sm:justify-end">
-                <Button size="sm" variant="outline" className="flex-1 sm:flex-none">Update Status</Button>
-                <Button size="sm" className="flex-1 sm:flex-none">
-                  <Star className="mr-2 h-3 w-3" /> Finalize
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-        {filtered.length === 0 && (
-          <p className="text-center text-sm text-muted-foreground py-8">No venues match the current filters.</p>
-        )}
-      </div>
+      {/* Table view */}
+      <PipelineTable
+        items={filtered}
+        columns={columns}
+        entityName="venue"
+        apiEndpoint="/api/venues"
+        onUpdate={refreshData}
+      />
+
+      {filtered.length === 0 && venues.length > 0 && (
+        <p className="text-center text-sm text-muted-foreground py-8">No venues match the current filters.</p>
+      )}
     </div>
   );
 }
