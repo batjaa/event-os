@@ -12,8 +12,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { PipelineFilters, usePipelineFilters } from "@/components/pipeline-view";
 import { PipelineTable } from "@/components/pipeline-table";
+import { EntityDrawer } from "@/components/entity-drawer";
 import { Mic2, Copy, Check, ExternalLink, Plus, X } from "lucide-react";
 
 type Speaker = {
@@ -37,6 +39,8 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
   const [speakers, setSpeakers] = useState(initialSpeakers);
   const [copied, setCopied] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [selectedSpeaker, setSelectedSpeaker] = useState<Speaker | null>(null);
+  const [drawerSaving, setDrawerSaving] = useState(false);
 
   const filtered = filter(speakers);
 
@@ -57,6 +61,152 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
       window.location.reload();
     }
   }, []);
+
+  // Drawer save
+  const handleDrawerSave = async () => {
+    if (!selectedSpeaker) return;
+    setDrawerSaving(true);
+    const form = document.getElementById("speaker-drawer-form") as HTMLFormElement;
+    if (form) {
+      const data = Object.fromEntries(new FormData(form));
+      await fetch(`/api/speakers/${selectedSpeaker.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "If-Match": "999" },
+        body: JSON.stringify(data),
+      });
+    }
+    setDrawerSaving(false);
+    setSelectedSpeaker(null);
+    refreshData();
+  };
+
+  // Speaker drawer sections
+  const drawerSections = selectedSpeaker
+    ? [
+        {
+          label: "Profile",
+          content: (
+            <form id="speaker-drawer-form" className="space-y-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Name</Label>
+                  <Input name="name" defaultValue={selectedSpeaker.name} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Email</Label>
+                  <Input name="email" defaultValue={selectedSpeaker.email || ""} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Company</Label>
+                  <Input name="company" defaultValue={selectedSpeaker.company || ""} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Title</Label>
+                  <Input name="title" defaultValue={selectedSpeaker.title || ""} />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Bio</Label>
+                <Textarea name="bio" rows={4} placeholder="Speaker bio..." />
+              </div>
+            </form>
+          ),
+        },
+        {
+          label: "Talk",
+          content: (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label>Talk Title</Label>
+                <Input name="talkTitle" defaultValue={selectedSpeaker.talkTitle || ""} form="speaker-drawer-form" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Abstract</Label>
+                <Textarea name="talkAbstract" rows={6} placeholder="Talk abstract..." form="speaker-drawer-form" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Type</Label>
+                  <Select name="talkType" defaultValue="talk">
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="talk">Talk</SelectItem>
+                      <SelectItem value="keynote">Keynote</SelectItem>
+                      <SelectItem value="workshop">Workshop</SelectItem>
+                      <SelectItem value="panel">Panel</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Track</Label>
+                  <Input name="trackPreference" defaultValue={selectedSpeaker.trackPreference || ""} form="speaker-drawer-form" />
+                </div>
+              </div>
+            </div>
+          ),
+        },
+        {
+          label: "Requirements",
+          content: (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">AV and logistics requirements for this speaker.</p>
+              <div className="grid grid-cols-2 gap-2">
+                {["Podium", "Projector", "Demo setup", "Wireless mic", "Lapel mic", "Hand-held mic", "USB-C adapter", "HDMI adapter", "Whiteboard", "Internet access"].map((req) => (
+                  <label key={req} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-stone-50 rounded px-2 py-1">
+                    <input type="checkbox" className="rounded border-stone-300" />
+                    <span>{req}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="space-y-1.5">
+                <Label>Special Requirements</Label>
+                <Textarea rows={3} placeholder="Any other requirements..." />
+              </div>
+            </div>
+          ),
+        },
+        {
+          label: "Pipeline",
+          content: (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Source</Label>
+                  <Select name="source" defaultValue={selectedSpeaker.source}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="intake">Intake</SelectItem>
+                      <SelectItem value="outreach">Outreach</SelectItem>
+                      <SelectItem value="sponsored">Sponsored</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Stage</Label>
+                  <Select name="stage" defaultValue={selectedSpeaker.stage}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="lead">Lead</SelectItem>
+                      <SelectItem value="engaged">Engaged</SelectItem>
+                      <SelectItem value="confirmed">Confirmed</SelectItem>
+                      <SelectItem value="declined">Declined</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Assigned To</Label>
+                <Input name="assignedTo" defaultValue={selectedSpeaker.assignedTo || ""} form="speaker-drawer-form" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Review Notes</Label>
+                <Textarea name="reviewNotes" rows={4} placeholder="Internal notes..." form="speaker-drawer-form" />
+              </div>
+            </div>
+          ),
+        },
+      ]
+    : [];
 
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -210,12 +360,24 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
           entityName="speaker"
           apiEndpoint="/api/speakers"
           onUpdate={refreshData}
+          onRowClick={(speaker) => setSelectedSpeaker(speaker)}
         />
       )}
 
       {filtered.length === 0 && speakers.length > 0 && (
         <p className="text-center text-sm text-muted-foreground py-8">No speakers match the current filters.</p>
       )}
+
+      {/* Detail drawer */}
+      <EntityDrawer
+        isOpen={!!selectedSpeaker}
+        onClose={() => setSelectedSpeaker(null)}
+        title={selectedSpeaker?.name || ""}
+        subtitle={selectedSpeaker?.company || selectedSpeaker?.email || ""}
+        sections={drawerSections}
+        onSave={handleDrawerSave}
+        saving={drawerSaving}
+      />
     </div>
   );
 }

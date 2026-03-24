@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Trash2, MoreHorizontal } from "lucide-react";
@@ -24,6 +25,7 @@ type PipelineTableProps<T extends { id: string; stage: string; source: string; a
   apiEndpoint: string; // e.g., "/api/speakers"
   idEndpoint?: string; // e.g., "/api/speakers" (+ /[id]) for PATCH/DELETE
   onUpdate?: () => void; // called after any mutation
+  onRowClick?: (item: T) => void; // opens detail drawer
 };
 
 // ─── Stage/Source badges ─────────────────────────────────
@@ -144,7 +146,7 @@ function StageDropdown({
 
 export function PipelineTable<
   T extends { id: string; stage: string; source: string; assignedTo: string | null }
->({ items, columns, entityName, apiEndpoint, idEndpoint, onUpdate }: PipelineTableProps<T>) {
+>({ items, columns, entityName, apiEndpoint, idEndpoint, onUpdate, onRowClick }: PipelineTableProps<T>) {
   const patchEndpoint = idEndpoint || apiEndpoint;
 
   const handlePatch = async (id: string, field: string, value: string) => {
@@ -196,7 +198,11 @@ export function PipelineTable<
           {items.map((item) => (
             <tr
               key={item.id}
-              className="border-b last:border-0 hover:bg-yellow-50/30 transition-colors"
+              onClick={() => onRowClick?.(item)}
+              className={cn(
+                "border-b last:border-0 hover:bg-yellow-50/30 transition-colors",
+                onRowClick && "cursor-pointer"
+              )}
             >
               {columns.map((col) => (
                 <td key={col.key} className="px-3 py-2">
