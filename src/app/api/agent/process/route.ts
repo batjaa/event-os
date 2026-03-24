@@ -22,10 +22,17 @@ function checkRateLimit(userId: string): boolean {
 }
 
 export async function POST(req: NextRequest) {
-  const ctx = await getApiContext(req);
-  if (ctx instanceof NextResponse) return ctx;
+  // In development, allow unauthenticated access to the agent
+  const isDev = process.env.NODE_ENV === "development";
+  let orgId = "dev";
 
-  const userId = ctx.userId || ctx.organizationId;
+  if (!isDev) {
+    const ctx = await getApiContext(req);
+    if (ctx instanceof NextResponse) return ctx;
+    orgId = ctx.organizationId;
+  }
+
+  const userId = orgId;
   if (!checkRateLimit(userId)) {
     return NextResponse.json(
       { error: "Rate limited. Please wait a moment." },
@@ -66,7 +73,7 @@ export async function POST(req: NextRequest) {
       ...action,
       payload: {
         ...action.payload,
-        organizationId: ctx.organizationId,
+        organizationId: orgId,
         editionId,
       },
     }));
