@@ -86,18 +86,12 @@ export function ChatPanel({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Cmd+K shortcut
+  // Focus textarea when panel opens
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        if (!isOpen) onClose(); // toggle
-        textareaRef.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [isOpen, onClose]);
+    if (isOpen) {
+      setTimeout(() => textareaRef.current?.focus(), 100);
+    }
+  }, [isOpen]);
 
   const handleSubmit = async () => {
     if (!input.trim() || loading) return;

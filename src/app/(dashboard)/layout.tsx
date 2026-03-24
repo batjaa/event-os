@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { ChatPanel } from "@/components/chat-panel";
 
@@ -11,9 +11,23 @@ export default function DashboardLayout({
 }) {
   const [chatOpen, setChatOpen] = useState(false);
 
+  const toggleChat = useCallback(() => setChatOpen((prev) => !prev), []);
+
+  // Cmd+K listener lives here — always mounted, regardless of panel state
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        toggleChat();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [toggleChat]);
+
   return (
     <div className="min-h-screen bg-background">
-      <Sidebar onToggleChat={() => setChatOpen(!chatOpen)} />
+      <Sidebar onToggleChat={toggleChat} />
       <main
         className={`min-h-screen pt-14 pb-16 lg:pt-0 lg:pb-0 lg:ml-56 transition-all duration-200 ${
           chatOpen ? "lg:mr-[400px]" : ""
