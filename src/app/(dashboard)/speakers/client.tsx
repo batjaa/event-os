@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -12,16 +13,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { PipelineFilters, usePipelineFilters } from "@/components/pipeline-view";
 import { PipelineTable } from "@/components/pipeline-table";
 import { EntityDrawer } from "@/components/entity-drawer";
-import { Mic2, Copy, Check, ExternalLink, Plus, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Mic2, Copy, Check, ExternalLink, Plus, X, Calendar, Clock } from "lucide-react";
 
 type Speaker = {
   id: string;
   name: string;
   email: string;
+  phone: string | null;
   talkTitle: string;
   talkAbstract: string | null;
   talkType: string | null;
@@ -29,6 +31,10 @@ type Speaker = {
   title: string | null;
   bio: string | null;
   headshotUrl: string | null;
+  linkedin: string | null;
+  website: string | null;
+  slideUrl: string | null;
+  requirements: string[] | null;
   status: string;
   reviewScore: number | null;
   reviewNotes: string | null;
@@ -39,14 +45,39 @@ type Speaker = {
   createdAt: Date;
 };
 
-export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[] }) {
+type Track = { id: string; name: string };
+type SessionSlot = {
+  id: string;
+  title: string;
+  speakerId: string | null;
+  day: number;
+  startTime: string | null;
+  endTime: string | null;
+  trackName: string | null;
+};
+
+const REQUIREMENT_OPTIONS = [
+  "Podium", "Projector", "Demo setup", "Wireless mic", "Lapel mic",
+  "Hand-held mic", "USB-C adapter", "HDMI adapter", "Whiteboard",
+  "Internet access", "Clicker/pointer", "Audio playback",
+];
+
+export function SpeakersClient({
+  initialSpeakers,
+  tracks,
+  sessions,
+}: {
+  initialSpeakers: Speaker[];
+  tracks: Track[];
+  sessions: SessionSlot[];
+}) {
   const { source, stage, setSource, setStage, filter } = usePipelineFilters();
   const [speakers, setSpeakers] = useState(initialSpeakers);
   const [copied, setCopied] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [selectedSpeaker, setSelectedSpeaker] = useState<Speaker | null>(null);
   const [drawerSaving, setDrawerSaving] = useState(false);
-  const [drawerForm, setDrawerForm] = useState<Record<string, string>>({});
+  const [drawerForm, setDrawerForm] = useState<Record<string, string | string[]>>({});
 
   const filtered = filter(speakers);
 
@@ -56,24 +87,29 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Refresh data without full page reload
   const refreshData = useCallback(() => {
     window.location.reload();
   }, []);
 
-  // Initialize form state when speaker is selected
+  // Drawer
   const openDrawer = (speaker: Speaker) => {
     setSelectedSpeaker(speaker);
     setDrawerForm({
       name: speaker.name || "",
       email: speaker.email || "",
+      phone: speaker.phone || "",
       company: speaker.company || "",
       title: speaker.title || "",
       bio: speaker.bio || "",
+      headshotUrl: speaker.headshotUrl || "",
+      linkedin: speaker.linkedin || "",
+      website: speaker.website || "",
       talkTitle: speaker.talkTitle || "",
       talkAbstract: speaker.talkAbstract || "",
       talkType: speaker.talkType || "talk",
       trackPreference: speaker.trackPreference || "",
+      slideUrl: speaker.slideUrl || "",
+      requirements: speaker.requirements || [],
       source: speaker.source || "intake",
       stage: speaker.stage || "lead",
       assignedTo: speaker.assignedTo || "",
@@ -81,11 +117,18 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
     });
   };
 
-  const updateField = (field: string, value: string | null) => {
+  const updateField = (field: string, value: string | string[] | null) => {
     setDrawerForm((prev) => ({ ...prev, [field]: value || "" }));
   };
 
-  // Drawer save — sends all form state fields
+  const toggleRequirement = (req: string) => {
+    const current = (drawerForm.requirements as string[]) || [];
+    const updated = current.includes(req)
+      ? current.filter((r) => r !== req)
+      : [...current, req];
+    updateField("requirements", updated);
+  };
+
   const handleDrawerSave = async () => {
     if (!selectedSpeaker) return;
     setDrawerSaving(true);
@@ -99,135 +142,6 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
     refreshData();
   };
 
-  // Speaker drawer sections — all controlled via drawerForm state
-  const drawerSections = selectedSpeaker
-    ? [
-        {
-          label: "Profile",
-          content: (
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label>Name</Label>
-                  <Input value={drawerForm.name || ""} onChange={(e) => updateField("name", e.target.value)} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Email</Label>
-                  <Input value={drawerForm.email || ""} onChange={(e) => updateField("email", e.target.value)} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Company</Label>
-                  <Input value={drawerForm.company || ""} onChange={(e) => updateField("company", e.target.value)} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Title</Label>
-                  <Input value={drawerForm.title || ""} onChange={(e) => updateField("title", e.target.value)} />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Bio</Label>
-                <Textarea rows={4} placeholder="Speaker bio..." value={drawerForm.bio || ""} onChange={(e) => updateField("bio", e.target.value)} />
-              </div>
-            </div>
-          ),
-        },
-        {
-          label: "Talk",
-          content: (
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label>Talk Title</Label>
-                <Input value={drawerForm.talkTitle || ""} onChange={(e) => updateField("talkTitle", e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Abstract</Label>
-                <Textarea rows={6} placeholder="Talk abstract..." value={drawerForm.talkAbstract || ""} onChange={(e) => updateField("talkAbstract", e.target.value)} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>Type</Label>
-                  <Select value={String(drawerForm.talkType || "talk")} onValueChange={(v) => updateField("talkType", v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="talk">Talk</SelectItem>
-                      <SelectItem value="keynote">Keynote</SelectItem>
-                      <SelectItem value="workshop">Workshop</SelectItem>
-                      <SelectItem value="panel">Panel</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Track</Label>
-                  <Input value={drawerForm.trackPreference || ""} onChange={(e) => updateField("trackPreference", e.target.value)} />
-                </div>
-              </div>
-            </div>
-          ),
-        },
-        {
-          label: "Requirements",
-          content: (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">AV and logistics requirements for this speaker.</p>
-              <div className="grid grid-cols-2 gap-2">
-                {["Podium", "Projector", "Demo setup", "Wireless mic", "Lapel mic", "Hand-held mic", "USB-C adapter", "HDMI adapter", "Whiteboard", "Internet access"].map((req) => (
-                  <label key={req} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-stone-50 rounded px-2 py-1">
-                    <input type="checkbox" className="rounded border-stone-300" />
-                    <span>{req}</span>
-                  </label>
-                ))}
-              </div>
-              <div className="space-y-1.5">
-                <Label>Special Requirements</Label>
-                <Textarea rows={3} placeholder="Any other requirements..." />
-              </div>
-              <p className="text-xs text-muted-foreground italic">Requirements persistence coming soon — needs a dedicated DB column.</p>
-            </div>
-          ),
-        },
-        {
-          label: "Pipeline",
-          content: (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>Source</Label>
-                  <Select value={String(drawerForm.source || "intake")} onValueChange={(v) => updateField("source", v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="intake">Intake</SelectItem>
-                      <SelectItem value="outreach">Outreach</SelectItem>
-                      <SelectItem value="sponsored">Sponsored</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Stage</Label>
-                  <Select value={String(drawerForm.stage || "lead")} onValueChange={(v) => updateField("stage", v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="lead">Lead</SelectItem>
-                      <SelectItem value="engaged">Engaged</SelectItem>
-                      <SelectItem value="confirmed">Confirmed</SelectItem>
-                      <SelectItem value="declined">Declined</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Assigned To</Label>
-                <Input value={drawerForm.assignedTo || ""} onChange={(e) => updateField("assignedTo", e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Review Notes</Label>
-                <Textarea rows={4} placeholder="Internal notes..." value={drawerForm.reviewNotes || ""} onChange={(e) => updateField("reviewNotes", e.target.value)} />
-              </div>
-            </div>
-          ),
-        },
-      ]
-    : [];
-
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
@@ -238,11 +152,14 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
       body: JSON.stringify(data),
     });
     if (res.ok) {
-      const json = await res.json();
-      setSpeakers((prev) => [json.data, ...prev]);
       setShowForm(false);
+      refreshData();
     }
   };
+
+  // Find assigned session for a speaker
+  const getAssignedSession = (speakerId: string) =>
+    sessions.find((s) => s.speakerId === speakerId);
 
   const columns = [
     {
@@ -288,6 +205,191 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
     },
   ];
 
+  // Drawer sections
+  const speakerSession = selectedSpeaker ? getAssignedSession(selectedSpeaker.id) : null;
+
+  const drawerSections = selectedSpeaker
+    ? [
+        {
+          label: "Profile",
+          content: (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Name</Label>
+                  <Input value={(drawerForm.name as string) || ""} onChange={(e) => updateField("name", e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Email</Label>
+                  <Input value={(drawerForm.email as string) || ""} onChange={(e) => updateField("email", e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Phone</Label>
+                  <Input value={(drawerForm.phone as string) || ""} onChange={(e) => updateField("phone", e.target.value)} placeholder="+976 8811 2233" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Company</Label>
+                  <Input value={(drawerForm.company as string) || ""} onChange={(e) => updateField("company", e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Job Title</Label>
+                  <Input value={(drawerForm.title as string) || ""} onChange={(e) => updateField("title", e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Profile Photo URL</Label>
+                  <Input value={(drawerForm.headshotUrl as string) || ""} onChange={(e) => updateField("headshotUrl", e.target.value)} placeholder="https://..." />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>LinkedIn</Label>
+                  <Input value={(drawerForm.linkedin as string) || ""} onChange={(e) => updateField("linkedin", e.target.value)} placeholder="https://linkedin.com/in/..." />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Website</Label>
+                  <Input value={(drawerForm.website as string) || ""} onChange={(e) => updateField("website", e.target.value)} placeholder="https://..." />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Bio</Label>
+                <Textarea rows={4} placeholder="Speaker bio for the event website..." value={(drawerForm.bio as string) || ""} onChange={(e) => updateField("bio", e.target.value)} />
+              </div>
+            </div>
+          ),
+        },
+        {
+          label: "Talk",
+          content: (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label>Talk Title</Label>
+                <Input value={(drawerForm.talkTitle as string) || ""} onChange={(e) => updateField("talkTitle", e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Abstract</Label>
+                <Textarea rows={6} placeholder="Talk abstract..." value={(drawerForm.talkAbstract as string) || ""} onChange={(e) => updateField("talkAbstract", e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Type</Label>
+                  <Select value={String(drawerForm.talkType || "talk")} onValueChange={(v) => updateField("talkType", v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="talk">Talk</SelectItem>
+                      <SelectItem value="keynote">Keynote</SelectItem>
+                      <SelectItem value="workshop">Workshop</SelectItem>
+                      <SelectItem value="panel">Panel</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Track</Label>
+                  <Select value={String(drawerForm.trackPreference || "")} onValueChange={(v) => updateField("trackPreference", v)}>
+                    <SelectTrigger><SelectValue placeholder="Select track" /></SelectTrigger>
+                    <SelectContent>
+                      {tracks.map((t) => (
+                        <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Slide Link</Label>
+                <Input value={(drawerForm.slideUrl as string) || ""} onChange={(e) => updateField("slideUrl", e.target.value)} placeholder="https://docs.google.com/presentation/..." />
+              </div>
+
+              {/* Assigned session */}
+              {speakerSession ? (
+                <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3">
+                  <p className="text-xs font-medium text-emerald-700 mb-1">Assigned Session</p>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Calendar className="h-3.5 w-3.5 text-emerald-600" />
+                    <span>Day {speakerSession.day}</span>
+                    {speakerSession.startTime && (
+                      <>
+                        <Clock className="h-3.5 w-3.5 text-emerald-600" />
+                        <span>
+                          {new Date(speakerSession.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
+                          {speakerSession.endTime && ` — ${new Date(speakerSession.endTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}`}
+                        </span>
+                      </>
+                    )}
+                    {speakerSession.trackName && (
+                      <Badge variant="outline" className="text-[10px]">{speakerSession.trackName}</Badge>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">No session assigned yet. Assign in the Agenda page.</p>
+              )}
+            </div>
+          ),
+        },
+        {
+          label: "Requirements",
+          content: (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">AV and logistics requirements for this speaker.</p>
+              <div className="grid grid-cols-2 gap-2">
+                {REQUIREMENT_OPTIONS.map((req) => (
+                  <label key={req} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-stone-50 rounded px-2 py-1">
+                    <input
+                      type="checkbox"
+                      className="rounded border-stone-300"
+                      checked={((drawerForm.requirements as string[]) || []).includes(req)}
+                      onChange={() => toggleRequirement(req)}
+                    />
+                    <span>{req}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ),
+        },
+        {
+          label: "Pipeline",
+          content: (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Source</Label>
+                  <Select value={String(drawerForm.source || "intake")} onValueChange={(v) => updateField("source", v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="intake">Intake</SelectItem>
+                      <SelectItem value="outreach">Outreach</SelectItem>
+                      <SelectItem value="sponsored">Sponsored</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Stage</Label>
+                  <Select value={String(drawerForm.stage || "lead")} onValueChange={(v) => updateField("stage", v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="lead">Lead</SelectItem>
+                      <SelectItem value="engaged">Engaged</SelectItem>
+                      <SelectItem value="confirmed">Confirmed</SelectItem>
+                      <SelectItem value="declined">Declined</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Assigned To</Label>
+                <Input value={(drawerForm.assignedTo as string) || ""} onChange={(e) => updateField("assignedTo", e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Review Notes</Label>
+                <Textarea rows={4} placeholder="Internal notes..." value={(drawerForm.reviewNotes as string) || ""} onChange={(e) => updateField("reviewNotes", e.target.value)} />
+              </div>
+            </div>
+          ),
+        },
+      ]
+    : [];
+
   return (
     <div>
       <div className="mb-6 space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between">
@@ -305,7 +407,6 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
         </div>
       </div>
 
-      {/* Create form */}
       {showForm && (
         <Card className="mb-4">
           <CardContent className="p-4">
@@ -351,7 +452,6 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
         </Card>
       )}
 
-      {/* Pipeline filters */}
       <PipelineFilters
         items={speakers}
         sources={["all", "intake", "outreach", "sponsored"]}
@@ -361,16 +461,13 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
         onStageChange={setStage}
       />
 
-      {/* Table view */}
       {speakers.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
             <Mic2 className="h-12 w-12 text-muted-foreground/30 mb-4" />
             <h3 className="text-lg font-medium mb-1">No speakers yet</h3>
             <p className="text-sm text-muted-foreground mb-4">Share your CFP link or add speakers via the agent chat.</p>
-            <Button onClick={handleCopyCfp}>
-              <Copy className="mr-2 h-4 w-4" /> Copy CFP Link
-            </Button>
+            <Button onClick={handleCopyCfp}><Copy className="mr-2 h-4 w-4" /> Copy CFP Link</Button>
           </CardContent>
         </Card>
       ) : (
@@ -388,7 +485,6 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
         <p className="text-center text-sm text-muted-foreground py-8">No speakers match the current filters.</p>
       )}
 
-      {/* Detail drawer */}
       <EntityDrawer
         key={selectedSpeaker?.id || "closed"}
         isOpen={!!selectedSpeaker}

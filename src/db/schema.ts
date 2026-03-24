@@ -131,15 +131,20 @@ export const speakerApplications = pgTable(
     // Speaker info
     name: varchar("name", { length: 255 }).notNull(),
     email: varchar("email", { length: 255 }).notNull(),
+    phone: varchar("phone", { length: 50 }),
     bio: text("bio"),
     headshotUrl: text("headshot_url"),
     company: varchar("company", { length: 255 }),
     title: varchar("title", { length: 255 }),
+    linkedin: varchar("linkedin", { length: 255 }),
+    website: varchar("website", { length: 255 }),
     // Talk info
     talkTitle: varchar("talk_title", { length: 500 }).notNull(),
     talkAbstract: text("talk_abstract"),
     talkType: sessionTypeEnum("talk_type").default("talk").notNull(),
     trackPreference: varchar("track_preference", { length: 255 }),
+    slideUrl: text("slide_url"),
+    requirements: jsonb("requirements").$type<string[]>(),
     // Review
     status: speakerStatusEnum("status").default("pending").notNull(),
     reviewScore: integer("review_score"), // average score from reviewers
