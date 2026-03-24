@@ -4,7 +4,16 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Copy, Check } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Copy, Check, Plus, X } from "lucide-react";
 
 type VolunteerStatus = "pending" | "accepted" | "rejected";
 
@@ -28,6 +37,7 @@ type Volunteer = {
 export function VolunteersClient({ initialVolunteers }: { initialVolunteers: Volunteer[] }) {
   const [filter, setFilter] = useState<VolunteerStatus | "all">("all");
   const [copied, setCopied] = useState(false);
+  const [showForm, setShowForm] = useState(false);
 
   const volunteers = initialVolunteers;
   const filtered = filter === "all" ? volunteers : volunteers.filter((v) => v.status === filter);
@@ -44,6 +54,21 @@ export function VolunteersClient({ initialVolunteers }: { initialVolunteers: Vol
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const data = Object.fromEntries(form);
+
+    await fetch("/api/volunteers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+
+    setShowForm(false);
+    window.location.reload();
+  };
+
   return (
     <div>
       <div className="mb-6 space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between">
@@ -55,9 +80,58 @@ export function VolunteersClient({ initialVolunteers }: { initialVolunteers: Vol
           <Button variant="outline" size="sm" onClick={handleCopyLink}>
             {copied ? <><Check className="mr-2 h-3 w-3" /> Copied</> : <><Copy className="mr-2 h-3 w-3" /> Signup Link</>}
           </Button>
-          <Button size="sm">+ Add Volunteer</Button>
+          <Button size="sm" onClick={() => setShowForm(!showForm)}>
+            {showForm ? <><X className="mr-2 h-3 w-3" /> Cancel</> : <><Plus className="mr-2 h-3 w-3" /> Add Volunteer</>}
+          </Button>
         </div>
       </div>
+
+      {/* Create form */}
+      {showForm && (
+        <Card className="mb-6">
+          <CardContent className="p-4">
+            <form onSubmit={handleCreate} className="space-y-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Name *</Label>
+                  <Input name="name" placeholder="e.g., Temuulen B." required />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Email *</Label>
+                  <Input name="email" type="email" placeholder="volunteer@email.mn" required />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Phone</Label>
+                  <Input name="phone" placeholder="+976 ..." />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Role</Label>
+                  <Input name="role" placeholder="e.g., Registration Desk" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Availability</Label>
+                  <Input name="availability" placeholder="e.g., Both days, mornings only" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>T-Shirt Size</Label>
+                  <Select name="tshirtSize" defaultValue="L">
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="XS">XS</SelectItem>
+                      <SelectItem value="S">S</SelectItem>
+                      <SelectItem value="M">M</SelectItem>
+                      <SelectItem value="L">L</SelectItem>
+                      <SelectItem value="XL">XL</SelectItem>
+                      <SelectItem value="XXL">XXL</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <Button type="submit" className="w-full sm:w-auto">Create Volunteer</Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 mb-6">
         <Card><CardContent className="p-4"><p className="text-2xl font-semibold tabular-nums">{counts.total}</p><p className="text-xs text-muted-foreground">Applications</p></CardContent></Card>

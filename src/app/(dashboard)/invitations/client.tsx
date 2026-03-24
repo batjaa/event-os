@@ -4,7 +4,17 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Plus, Send } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Plus, Send, X } from "lucide-react";
 
 type InvitationType = "special_guest" | "speaker_invitee" | "organizer_invitee" | "student" | "vip";
 type InvitationStatus = "pending" | "sent" | "accepted" | "declined";
@@ -43,6 +53,7 @@ type Invitation = {
 
 export function InvitationsClient({ initialInvitations }: { initialInvitations: Invitation[] }) {
   const [typeFilter, setTypeFilter] = useState<InvitationType | "all">("all");
+  const [showForm, setShowForm] = useState(false);
 
   const filtered = typeFilter === "all" ? initialInvitations : initialInvitations.filter((i) => i.type === typeFilter);
 
@@ -60,6 +71,21 @@ export function InvitationsClient({ initialInvitations }: { initialInvitations: 
   const organizerAllocUsed = initialInvitations.filter((i) => i.type === "organizer_invitee").length;
   const organizerAllocTotal = 3 * allocationConfig.organizerInvitees; // 3 organizers * 2
 
+  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const data = Object.fromEntries(form);
+
+    await fetch("/api/invitations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+
+    setShowForm(false);
+    window.location.reload();
+  };
+
   return (
     <div>
       <div className="mb-6 space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between">
@@ -69,9 +95,53 @@ export function InvitationsClient({ initialInvitations }: { initialInvitations: 
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm"><Send className="mr-2 h-3 w-3" /> Send Batch</Button>
-          <Button size="sm"><Plus className="mr-2 h-3 w-3" /> Invite Guest</Button>
+          <Button size="sm" onClick={() => setShowForm(!showForm)}>
+            {showForm ? <><X className="mr-2 h-3 w-3" /> Cancel</> : <><Plus className="mr-2 h-3 w-3" /> Invite Guest</>}
+          </Button>
         </div>
       </div>
+
+      {/* Create form */}
+      {showForm && (
+        <Card className="mb-6">
+          <CardContent className="p-4">
+            <form onSubmit={handleCreate} className="space-y-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Name *</Label>
+                  <Input name="name" placeholder="e.g., Bat-Erdene D." required />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Type</Label>
+                  <Select name="type" defaultValue="special_guest">
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="special_guest">Special Guest</SelectItem>
+                      <SelectItem value="speaker_invitee">Speaker Invitee</SelectItem>
+                      <SelectItem value="organizer_invitee">Organizer Invitee</SelectItem>
+                      <SelectItem value="student">Student</SelectItem>
+                      <SelectItem value="vip">VIP</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Email</Label>
+                  <Input name="email" type="email" placeholder="guest@email.mn" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Invited By</Label>
+                  <Input name="invitedBy" placeholder="e.g., Organizer name" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Notes</Label>
+                <Textarea name="notes" placeholder="Any notes about this invitation..." rows={2} />
+              </div>
+              <Button type="submit" className="w-full sm:w-auto">Create Invitation</Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats + Allocations */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 mb-4">

@@ -1,9 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Plus, Star, Check } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Plus, Star, Check, X } from "lucide-react";
 
 type VenueStatus = "identified" | "contacted" | "negotiating" | "proposal_received" | "finalized" | "declined";
 
@@ -31,7 +35,23 @@ type Venue = {
 };
 
 export function VenueClient({ initialVenues }: { initialVenues: Venue[] }) {
+  const [showForm, setShowForm] = useState(false);
   const finalized = initialVenues.find((v) => v.isFinalized);
+
+  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const data = Object.fromEntries(form);
+
+    await fetch("/api/venues", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+
+    setShowForm(false);
+    window.location.reload();
+  };
 
   return (
     <div>
@@ -40,8 +60,65 @@ export function VenueClient({ initialVenues }: { initialVenues: Venue[] }) {
           <h1 className="font-heading text-2xl font-bold tracking-tight">Venue</h1>
           <p className="text-sm text-muted-foreground">Find and lock in your event venue</p>
         </div>
-        <Button size="sm"><Plus className="mr-2 h-3 w-3" /> Add Candidate</Button>
+        <Button size="sm" onClick={() => setShowForm(!showForm)}>
+          {showForm ? <><X className="mr-2 h-3 w-3" /> Cancel</> : <><Plus className="mr-2 h-3 w-3" /> Add Candidate</>}
+        </Button>
       </div>
+
+      {/* Create form */}
+      {showForm && (
+        <Card className="mb-6">
+          <CardContent className="p-4">
+            <form onSubmit={handleCreate} className="space-y-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Name *</Label>
+                  <Input name="name" placeholder="e.g., Shangri-La Hotel" required />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Address</Label>
+                  <Input name="address" placeholder="e.g., Olympic St 19, Ulaanbaatar" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Contact Name</Label>
+                  <Input name="contactName" placeholder="e.g., Bat-Erdene D." />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Contact Email</Label>
+                  <Input name="contactEmail" type="email" placeholder="contact@venue.mn" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Contact Phone</Label>
+                  <Input name="contactPhone" placeholder="+976 ..." />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Capacity</Label>
+                  <Input name="capacity" type="number" placeholder="e.g., 500" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Price Quote</Label>
+                  <Input name="priceQuote" placeholder="e.g., $5,000/day" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Assigned To</Label>
+                  <Input name="assignedTo" placeholder="e.g., Team member name" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Pros</Label>
+                  <Textarea name="pros" placeholder="What makes this venue great..." rows={2} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Cons</Label>
+                  <Textarea name="cons" placeholder="Any drawbacks..." rows={2} />
+                </div>
+              </div>
+              <Button type="submit" className="w-full sm:w-auto">Create Venue Candidate</Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Finalized venue banner */}
       {finalized && (

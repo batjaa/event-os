@@ -4,7 +4,17 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Plus, X } from "lucide-react";
 
 type BoothStatus = "available" | "reserved" | "confirmed" | "setup";
 
@@ -27,6 +37,7 @@ type Booth = {
 
 export function BoothsClient({ initialBooths }: { initialBooths: Booth[] }) {
   const [filter, setFilter] = useState<BoothStatus | "all">("all");
+  const [showForm, setShowForm] = useState(false);
 
   const booths = initialBooths;
   const filtered = filter === "all" ? booths : booths.filter((b) => b.status === filter);
@@ -38,6 +49,21 @@ export function BoothsClient({ initialBooths }: { initialBooths: Booth[] }) {
     confirmed: booths.filter((b) => b.status === "confirmed").length,
   };
 
+  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const data = Object.fromEntries(form);
+
+    await fetch("/api/booths", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+
+    setShowForm(false);
+    window.location.reload();
+  };
+
   return (
     <div>
       <div className="mb-6 space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between">
@@ -45,8 +71,50 @@ export function BoothsClient({ initialBooths }: { initialBooths: Booth[] }) {
           <h1 className="font-heading text-2xl font-bold tracking-tight">Booths</h1>
           <p className="text-sm text-muted-foreground">Manage exhibitor booths and floor plan</p>
         </div>
-        <Button size="sm"><Plus className="mr-2 h-3 w-3" /> Add Booth</Button>
+        <Button size="sm" onClick={() => setShowForm(!showForm)}>
+          {showForm ? <><X className="mr-2 h-3 w-3" /> Cancel</> : <><Plus className="mr-2 h-3 w-3" /> Add Booth</>}
+        </Button>
       </div>
+
+      {/* Create form */}
+      {showForm && (
+        <Card className="mb-6">
+          <CardContent className="p-4">
+            <form onSubmit={handleCreate} className="space-y-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Name *</Label>
+                  <Input name="name" placeholder="e.g., Booth A1" required />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Location</Label>
+                  <Input name="location" placeholder="e.g., Hall B, Row 3" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Size</Label>
+                  <Select name="size" defaultValue="standard">
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="small">Small</SelectItem>
+                      <SelectItem value="standard">Standard</SelectItem>
+                      <SelectItem value="premium">Premium</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Equipment</Label>
+                  <Input name="equipment" placeholder="e.g., Table, chairs, power strip" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Notes</Label>
+                <Textarea name="notes" placeholder="Any additional notes about this booth..." rows={2} />
+              </div>
+              <Button type="submit" className="w-full sm:w-auto">Create Booth</Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 mb-6">
         <Card><CardContent className="p-4"><p className="text-2xl font-semibold tabular-nums">{counts.total}</p><p className="text-xs text-muted-foreground">Total Booths</p></CardContent></Card>
