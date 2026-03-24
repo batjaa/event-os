@@ -103,3 +103,21 @@ export async function PATCH(
 
   return NextResponse.json({ data: updated });
 }
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+
+  const [deleted] = await db
+    .delete(speakerApplications)
+    .where(eq(speakerApplications.id, id))
+    .returning();
+
+  if (!deleted) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  return NextResponse.json({ data: { id } });
+}

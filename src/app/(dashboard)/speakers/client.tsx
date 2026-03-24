@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mic2, Copy, Check, ExternalLink } from "lucide-react";
+import { Mic2, Copy, Check, ExternalLink, Trash2 } from "lucide-react";
 
 type SpeakerStatus = "pending" | "accepted" | "rejected" | "waitlisted";
 
@@ -41,6 +41,21 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
     accepted: speakers.filter((s) => s.status === "accepted").length,
     pending: speakers.filter((s) => s.status === "pending").length,
     rejected: speakers.filter((s) => s.status === "rejected").length,
+  };
+
+  const handleStatusChange = async (id: string, status: string, version: number) => {
+    await fetch(`/api/speakers/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "If-Match": String(version) },
+      body: JSON.stringify({ status }),
+    });
+    window.location.reload();
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Delete this speaker application?")) return;
+    await fetch(`/api/speakers/${id}`, { method: "DELETE" });
+    window.location.reload();
   };
 
   const handleCopyCfp = () => {
@@ -122,10 +137,20 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
                   </div>
                 )}
               </div>
-              {speaker.status === "pending" && (
+              {(
                 <div className="flex gap-2 mt-3 sm:justify-end">
-                  <Button size="sm" variant="outline" className="flex-1 sm:flex-none">Reject</Button>
-                  <Button size="sm" className="flex-1 sm:flex-none">Accept</Button>
+                  <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(speaker.id)}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                  {speaker.status === "pending" && (
+                    <>
+                      <Button size="sm" variant="outline" className="flex-1 sm:flex-none" onClick={() => handleStatusChange(speaker.id, "rejected", 1)}>Reject</Button>
+                      <Button size="sm" className="flex-1 sm:flex-none" onClick={() => handleStatusChange(speaker.id, "accepted", 1)}>Accept</Button>
+                    </>
+                  )}
+                  {speaker.status === "accepted" && (
+                    <Button size="sm" variant="outline" className="flex-1 sm:flex-none" onClick={() => handleStatusChange(speaker.id, "waitlisted", 1)}>Waitlist</Button>
+                  )}
                 </div>
               )}
             </CardContent>
