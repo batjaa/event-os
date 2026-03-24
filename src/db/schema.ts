@@ -268,6 +268,139 @@ export const eventQueue = pgTable(
   ]
 );
 
+// ─── Volunteer Applications ──────────────────────────────
+
+export const volunteerApplications = pgTable(
+  "volunteer_applications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => eventEditions.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    email: varchar("email", { length: 255 }).notNull(),
+    phone: varchar("phone", { length: 50 }),
+    role: varchar("role", { length: 100 }), // registration, stage, logistics, etc.
+    availability: text("availability"), // which days/shifts
+    experience: text("experience"),
+    tshirtSize: varchar("tshirt_size", { length: 10 }),
+    status: varchar("status", { length: 50 }).default("pending").notNull(),
+    assignedShift: varchar("assigned_shift", { length: 255 }),
+    notes: text("notes"),
+    version: integer("version").default(1).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("volunteer_edition_idx").on(table.editionId),
+    index("volunteer_org_idx").on(table.organizationId),
+  ]
+);
+
+// ─── Booths ──────────────────────────────────────────────
+
+export const booths = pgTable(
+  "booths",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => eventEditions.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(), // e.g., "Booth A1"
+    location: varchar("location", { length: 255 }), // e.g., "Hall B, Row 2"
+    size: varchar("size", { length: 50 }), // small, medium, large, premium
+    price: integer("price"), // in smallest currency unit
+    status: varchar("status", { length: 50 }).default("available").notNull(), // available, reserved, confirmed, setup
+    sponsorId: uuid("sponsor_id").references(() => sponsorApplications.id, {
+      onDelete: "set null",
+    }),
+    equipment: text("equipment"), // power, wifi, table, chairs, etc.
+    notes: text("notes"),
+    version: integer("version").default(1).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("booth_edition_idx").on(table.editionId),
+    index("booth_org_idx").on(table.organizationId),
+  ]
+);
+
+// ─── Media Partners ──────────────────────────────────────
+
+export const mediaPartners = pgTable(
+  "media_partners",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => eventEditions.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    companyName: varchar("company_name", { length: 255 }).notNull(),
+    contactName: varchar("contact_name", { length: 255 }).notNull(),
+    contactEmail: varchar("contact_email", { length: 255 }).notNull(),
+    type: varchar("type", { length: 100 }), // tv, online, print, podcast, blog
+    reach: varchar("reach", { length: 255 }), // audience size / coverage area
+    proposal: text("proposal"), // what they offer
+    deliverables: text("deliverables"), // what we provide to them
+    status: varchar("status", { length: 50 }).default("pending").notNull(),
+    logoUrl: text("logo_url"),
+    notes: text("notes"),
+    version: integer("version").default(1).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("media_edition_idx").on(table.editionId),
+    index("media_org_idx").on(table.organizationId),
+  ]
+);
+
+// ─── Marketing Campaigns ─────────────────────────────────
+
+export const campaigns = pgTable(
+  "campaigns",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => eventEditions.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    title: varchar("title", { length: 500 }).notNull(),
+    type: varchar("type", { length: 100 }).notNull(), // speaker_announcement, sponsor_promo, event_update, social_post
+    platform: varchar("platform", { length: 100 }), // twitter, facebook, instagram, linkedin, telegram
+    content: text("content"),
+    scheduledDate: timestamp("scheduled_date"),
+    publishedDate: timestamp("published_date"),
+    status: varchar("status", { length: 50 }).default("draft").notNull(), // draft, scheduled, published, cancelled
+    speakerId: uuid("speaker_id").references(() => speakerApplications.id, {
+      onDelete: "set null",
+    }),
+    sponsorId: uuid("sponsor_id").references(() => sponsorApplications.id, {
+      onDelete: "set null",
+    }),
+    notes: text("notes"),
+    version: integer("version").default(1).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("campaign_edition_idx").on(table.editionId),
+    index("campaign_org_idx").on(table.organizationId),
+    index("campaign_scheduled_idx").on(table.scheduledDate),
+  ]
+);
+
 // ─── Audit Log ───────────────────────────────────────────
 
 export const auditLog = pgTable(
