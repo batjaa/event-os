@@ -81,6 +81,8 @@ export function Sidebar({ onToggleChat }: { onToggleChat?: () => void }) {
   const [editions, setEditions] = useState<Edition[]>([]);
   const [activeEdition, setActiveEdition] = useState<string>("");
   const [showEditionPicker, setShowEditionPicker] = useState(false);
+  const [showNewEvent, setShowNewEvent] = useState(false);
+  const [newEventName, setNewEventName] = useState("");
 
   // Fetch editions on mount
   useEffect(() => {
@@ -178,6 +180,49 @@ export function Sidebar({ onToggleChat }: { onToggleChat?: () => void }) {
                     {ed.name}
                   </button>
                 ))}
+                <div className="border-t border-stone-700 mt-1 pt-1">
+                  {showNewEvent ? (
+                    <div className="px-3 py-2 space-y-2">
+                      <input
+                        autoFocus
+                        value={newEventName}
+                        onChange={(e) => setNewEventName(e.target.value)}
+                        placeholder="e.g., Dev Summit 2027"
+                        className="w-full rounded bg-stone-700 border-stone-600 px-2 py-1 text-xs text-white placeholder:text-stone-400 outline-none focus:ring-1 focus:ring-yellow-500"
+                        onKeyDown={async (e) => {
+                          if (e.key === "Enter" && newEventName.trim()) {
+                            const res = await fetch("/api/editions/create", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ name: newEventName }),
+                            });
+                            if (res.ok) {
+                              const json = await res.json();
+                              await fetch("/api/editions/switch", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ editionId: json.data.id }),
+                              });
+                              window.location.reload();
+                            }
+                          }
+                          if (e.key === "Escape") {
+                            setShowNewEvent(false);
+                            setNewEventName("");
+                          }
+                        }}
+                      />
+                      <p className="text-[10px] text-stone-500">Enter to create, Esc to cancel</p>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowNewEvent(true)}
+                      className="block w-full px-3 py-1.5 text-left text-xs text-yellow-400 hover:bg-stone-700 transition-colors"
+                    >
+                      + New Event
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>
