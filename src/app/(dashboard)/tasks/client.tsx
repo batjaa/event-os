@@ -4,7 +4,16 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Plus, Calendar, User } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Plus, Calendar, User, X } from "lucide-react";
 
 type TaskStatus = "todo" | "in_progress" | "done" | "blocked";
 type Priority = "low" | "medium" | "high" | "urgent";
@@ -46,6 +55,7 @@ export function TasksClient({ initialTasks, initialTeams }: { initialTasks: Task
   const [teamFilter, setTeamFilter] = useState<string | "all">("all");
   const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">("all");
   const [view, setView] = useState<"list" | "board">("list");
+  const [showForm, setShowForm] = useState(false);
 
   const filtered = initialTasks
     .filter((t) => teamFilter === "all" || t.teamId === teamFilter)
@@ -56,6 +66,21 @@ export function TasksClient({ initialTasks, initialTeams }: { initialTasks: Task
     in_progress: initialTasks.filter((t) => t.status === "in_progress").length,
     done: initialTasks.filter((t) => t.status === "done").length,
     blocked: initialTasks.filter((t) => t.status === "blocked").length,
+  };
+
+  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const data = Object.fromEntries(form);
+
+    await fetch("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+
+    setShowForm(false);
+    window.location.reload();
   };
 
   return (
@@ -80,9 +105,52 @@ export function TasksClient({ initialTasks, initialTeams }: { initialTasks: Task
               Board
             </button>
           </div>
-          <Button size="sm"><Plus className="mr-2 h-3 w-3" /> Add Task</Button>
+          <Button size="sm" onClick={() => setShowForm(!showForm)}>
+            {showForm ? <><X className="mr-2 h-3 w-3" /> Cancel</> : <><Plus className="mr-2 h-3 w-3" /> Add Task</>}
+          </Button>
         </div>
       </div>
+
+      {/* Create form */}
+      {showForm && (
+        <Card className="mb-6">
+          <CardContent className="p-4">
+            <form onSubmit={handleCreate} className="space-y-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Title *</Label>
+                  <Input name="title" placeholder="e.g., Book keynote venue" required />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Description</Label>
+                  <Input name="description" placeholder="Optional description" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Priority</Label>
+                  <Select name="priority" defaultValue="medium">
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="urgent">Urgent</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Assignee</Label>
+                  <Input name="assigneeName" placeholder="e.g., Bold B." />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Due Date</Label>
+                  <Input name="dueDate" type="date" />
+                </div>
+              </div>
+              <Button type="submit" className="w-full sm:w-auto">Create Task</Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Summary stats */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 mb-6">

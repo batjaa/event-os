@@ -4,7 +4,17 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Plus, ArrowRight } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Plus, ArrowRight, X } from "lucide-react";
 
 type OutreachStatus = "identified" | "contacted" | "interested" | "negotiating" | "confirmed" | "declined" | "converted";
 type TargetType = "speaker" | "sponsor" | "booth" | "volunteer" | "media";
@@ -43,6 +53,7 @@ type OutreachRecord = {
 export function OutreachClient({ initialOutreach }: { initialOutreach: OutreachRecord[] }) {
   const [typeFilter, setTypeFilter] = useState<TargetType | "all">("all");
   const [statusFilter, setStatusFilter] = useState<OutreachStatus | "all">("all");
+  const [showForm, setShowForm] = useState(false);
 
   const filtered = initialOutreach
     .filter((o) => typeFilter === "all" || o.targetType === typeFilter)
@@ -56,6 +67,21 @@ export function OutreachClient({ initialOutreach }: { initialOutreach: OutreachR
     confirmed: initialOutreach.filter((o) => o.status === "confirmed").length,
   };
 
+  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const data = Object.fromEntries(form);
+
+    await fetch("/api/outreach", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+
+    setShowForm(false);
+    window.location.reload();
+  };
+
   return (
     <div>
       <div className="mb-6 space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between">
@@ -63,8 +89,60 @@ export function OutreachClient({ initialOutreach }: { initialOutreach: OutreachR
           <h1 className="font-heading text-2xl font-bold tracking-tight">Outreach</h1>
           <p className="text-sm text-muted-foreground">Proactive sourcing for speakers, sponsors, partners, and volunteers</p>
         </div>
-        <Button size="sm"><Plus className="mr-2 h-3 w-3" /> Add Lead</Button>
+        <Button size="sm" onClick={() => setShowForm(!showForm)}>
+          {showForm ? <><X className="mr-2 h-3 w-3" /> Cancel</> : <><Plus className="mr-2 h-3 w-3" /> Add Lead</>}
+        </Button>
       </div>
+
+      {/* Create form */}
+      {showForm && (
+        <Card className="mb-6">
+          <CardContent className="p-4">
+            <form onSubmit={handleCreate} className="space-y-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Name *</Label>
+                  <Input name="name" placeholder="e.g., Jane Doe" required />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Target Type</Label>
+                  <Select name="targetType" defaultValue="speaker">
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="speaker">Speaker</SelectItem>
+                      <SelectItem value="sponsor">Sponsor</SelectItem>
+                      <SelectItem value="booth">Booth</SelectItem>
+                      <SelectItem value="volunteer">Volunteer</SelectItem>
+                      <SelectItem value="media">Media</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Email</Label>
+                  <Input name="email" type="email" placeholder="jane@company.com" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Company</Label>
+                  <Input name="company" placeholder="e.g., Acme Corp" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Source</Label>
+                  <Input name="source" placeholder="e.g., LinkedIn, Referral" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Assigned To</Label>
+                  <Input name="assignedTo" placeholder="e.g., Bold B." />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Notes</Label>
+                <Textarea name="notes" placeholder="Any notes about this lead..." rows={2} />
+              </div>
+              <Button type="submit" className="w-full sm:w-auto">Create Lead</Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Pipeline funnel */}
       <div className="flex items-center gap-1 mb-6 overflow-x-auto pb-2">
