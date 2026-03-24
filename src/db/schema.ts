@@ -144,6 +144,10 @@ export const speakerApplications = pgTable(
     status: speakerStatusEnum("status").default("pending").notNull(),
     reviewScore: integer("review_score"), // average score from reviewers
     reviewNotes: text("review_notes"),
+    // Pipeline (universal)
+    source: varchar("source", { length: 50 }).default("intake").notNull(), // intake | outreach | sponsored
+    stage: varchar("stage", { length: 50 }).default("lead").notNull(), // lead | engaged | confirmed | declined
+    assignedTo: varchar("assigned_to", { length: 255 }),
     // Meta
     version: integer("version").default(1).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -151,6 +155,7 @@ export const speakerApplications = pgTable(
   },
   (table) => [
     index("speaker_edition_status_idx").on(table.editionId, table.status),
+    index("speaker_edition_stage_idx").on(table.editionId, table.stage),
     index("speaker_org_idx").on(table.organizationId),
   ]
 );
@@ -209,6 +214,9 @@ export const sponsorApplications = pgTable(
     packagePreference: varchar("package_preference", { length: 100 }),
     message: text("message"),
     status: varchar("status", { length: 50 }).default("pending").notNull(),
+    source: varchar("source", { length: 50 }).default("intake").notNull(),
+    stage: varchar("stage", { length: 50 }).default("lead").notNull(),
+    assignedTo: varchar("assigned_to", { length: 255 }),
     version: integer("version").default(1).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -237,6 +245,9 @@ export const attendees = pgTable(
     checkedIn: boolean("checked_in").default(false).notNull(),
     checkedInAt: timestamp("checked_in_at"),
     checkedInBy: varchar("checked_in_by", { length: 100 }), // station identifier
+    source: varchar("source", { length: 50 }).default("intake").notNull(),
+    stage: varchar("stage", { length: 50 }).default("lead").notNull(),
+    assignedTo: varchar("assigned_to", { length: 255 }),
     version: integer("version").default(1).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
@@ -294,6 +305,8 @@ export const venues = pgTable(
     cons: text("cons"),
     photos: jsonb("photos").$type<string[]>(), // array of URLs
     notes: text("notes"),
+    source: varchar("source", { length: 50 }).default("intake").notNull(),
+    stage: varchar("stage", { length: 50 }).default("lead").notNull(),
     version: integer("version").default(1).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -464,6 +477,9 @@ export const volunteerApplications = pgTable(
     status: varchar("status", { length: 50 }).default("pending").notNull(),
     assignedShift: varchar("assigned_shift", { length: 255 }),
     notes: text("notes"),
+    source: varchar("source", { length: 50 }).default("intake").notNull(),
+    stage: varchar("stage", { length: 50 }).default("lead").notNull(),
+    assignedTo: varchar("assigned_to", { length: 255 }),
     version: integer("version").default(1).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -496,6 +512,9 @@ export const booths = pgTable(
     }),
     equipment: text("equipment"), // power, wifi, table, chairs, etc.
     notes: text("notes"),
+    source: varchar("source", { length: 50 }).default("intake").notNull(),
+    stage: varchar("stage", { length: 50 }).default("lead").notNull(),
+    assignedTo: varchar("assigned_to", { length: 255 }),
     version: integer("version").default(1).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -528,6 +547,9 @@ export const mediaPartners = pgTable(
     status: varchar("status", { length: 50 }).default("pending").notNull(),
     logoUrl: text("logo_url"),
     notes: text("notes"),
+    source: varchar("source", { length: 50 }).default("intake").notNull(),
+    stage: varchar("stage", { length: 50 }).default("lead").notNull(),
+    assignedTo: varchar("assigned_to", { length: 255 }),
     version: integer("version").default(1).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
