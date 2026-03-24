@@ -41,11 +41,19 @@ export async function POST(req: NextRequest) {
   if (ctx instanceof NextResponse) return ctx;
 
   const body = await req.json();
-  const { editionId, trackId, speakerId, title, description, type, startTime, endTime, room, day } = body;
+  const { trackId, speakerId, title, description, type, startTime, endTime, room, day } = body;
+
+  // Use provided editionId, or fall back to active edition
+  let editionId = body.editionId;
+  if (!editionId) {
+    const { getActiveIds } = await import("@/lib/queries");
+    const ids = await getActiveIds();
+    editionId = ids?.editionId;
+  }
 
   if (!editionId || !title) {
     return NextResponse.json(
-      { error: "editionId and title are required" },
+      { error: "title is required" },
       { status: 400 }
     );
   }
