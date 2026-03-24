@@ -57,9 +57,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  if (!editionId || !organizationId || !name || !email || !talkTitle) {
+  if (!editionId || !organizationId || !name) {
     return NextResponse.json(
-      { error: "Missing required fields: name, email, talkTitle" },
+      { error: "name is required" },
       { status: 400 }
     );
   }
@@ -70,11 +70,11 @@ export async function POST(req: NextRequest) {
       editionId,
       organizationId,
       name,
-      email,
+      email: email || "",
       bio: bio || null,
       company: company || null,
       title: title || null,
-      talkTitle,
+      talkTitle: talkTitle || "TBD",
       talkAbstract: talkAbstract || null,
       talkType: talkType || "talk",
       trackPreference: trackPreference || null,

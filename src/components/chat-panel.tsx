@@ -312,8 +312,8 @@ export function ChatPanel({
                       </div>
                     )}
 
-                    {/* Action buttons — only show when entities have high enough confidence */}
-                    {msg.actions && msg.actions.length > 0 && (!msg.entities || msg.entities.every(e => e.confidence >= 0.7)) && (
+                    {/* Action buttons — always show, partial records are OK */}
+                    {msg.actions && msg.actions.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {msg.actions.length > 1 && (
                           <Button

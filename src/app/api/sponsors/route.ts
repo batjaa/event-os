@@ -31,9 +31,9 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { companyName, contactName, contactEmail, packagePreference, message } = body;
 
-  if (!companyName || !contactName || !contactEmail) {
+  if (!companyName) {
     return NextResponse.json(
-      { error: "companyName, contactName, and contactEmail are required" },
+      { error: "companyName is required" },
       { status: 400 }
     );
   }
@@ -44,8 +44,8 @@ export async function POST(req: NextRequest) {
       editionId: ids.editionId,
       organizationId: ids.orgId,
       companyName,
-      contactName,
-      contactEmail,
+      contactName: contactName || "",
+      contactEmail: contactEmail || "",
       packagePreference: packagePreference || null,
       message: message || null,
       status: "pending",
