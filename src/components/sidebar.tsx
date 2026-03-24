@@ -19,19 +19,27 @@ import {
   Store,
   Tv,
   Megaphone,
+  MapPin,
+  Send,
+  CheckSquare,
+  Ticket,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/agenda", label: "Agenda", icon: Calendar },
+  { href: "/venue", label: "Venue", icon: MapPin },
   { href: "/speakers", label: "Speakers", icon: Mic2 },
   { href: "/sponsors", label: "Sponsors", icon: Building2 },
   { href: "/booths", label: "Booths", icon: Store },
   { href: "/volunteers", label: "Volunteers", icon: HandHelping },
+  { href: "/outreach", label: "Outreach", icon: Send },
   { href: "/media", label: "Media", icon: Tv },
   { href: "/marketing", label: "Marketing", icon: Megaphone },
   { href: "/attendees", label: "Attendees", icon: Users },
+  { href: "/invitations", label: "Invitations", icon: Ticket },
   { href: "/check-in", label: "Check-in", icon: ScanLine },
 ];
 
@@ -158,7 +166,7 @@ export function Sidebar() {
 
       {/* Mobile bottom nav — quick access to key pages */}
       <nav className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-around border-t border-stone-200 bg-white py-2 lg:hidden">
-        {[navItems[0], navItems[1], navItems[2], navItems[8], navItems[9]].map((item) => {
+        {[navItems[0], navItems[1], navItems[2], navItems[4], navItems[13]].map((item) => {
           const isActive =
             pathname === item.href ||
             (item.href !== "/" && pathname.startsWith(item.href));

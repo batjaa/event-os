@@ -268,6 +268,180 @@ export const eventQueue = pgTable(
   ]
 );
 
+// ─── Venues ──────────────────────────────────────────────
+
+export const venues = pgTable(
+  "venues",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => eventEditions.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    address: text("address"),
+    contactName: varchar("contact_name", { length: 255 }),
+    contactEmail: varchar("contact_email", { length: 255 }),
+    contactPhone: varchar("contact_phone", { length: 50 }),
+    capacity: integer("capacity"),
+    priceQuote: text("price_quote"), // free-text for negotiation notes
+    status: varchar("status", { length: 50 }).default("identified").notNull(), // identified, contacted, negotiating, proposal_received, finalized, declined
+    isFinalized: boolean("is_finalized").default(false).notNull(),
+    assignedTo: varchar("assigned_to", { length: 255 }), // organizer responsible
+    pros: text("pros"),
+    cons: text("cons"),
+    photos: jsonb("photos").$type<string[]>(), // array of URLs
+    notes: text("notes"),
+    version: integer("version").default(1).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("venue_edition_idx").on(table.editionId),
+    index("venue_org_idx").on(table.organizationId),
+  ]
+);
+
+// ─── Outreach (proactive sourcing for any entity) ────────
+
+export const outreach = pgTable(
+  "outreach",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => eventEditions.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    targetType: varchar("target_type", { length: 50 }).notNull(), // speaker, sponsor, booth, volunteer, media
+    name: varchar("name", { length: 255 }).notNull(),
+    email: varchar("email", { length: 255 }),
+    company: varchar("company", { length: 255 }),
+    role: varchar("role", { length: 255 }), // their title/role
+    status: varchar("status", { length: 50 }).default("identified").notNull(), // identified, contacted, interested, negotiating, confirmed, declined, converted
+    assignedTo: varchar("assigned_to", { length: 255 }), // team member responsible
+    lastContactDate: timestamp("last_contact_date"),
+    nextFollowUp: timestamp("next_follow_up"),
+    source: varchar("source", { length: 255 }), // how we found them
+    notes: text("notes"),
+    convertedToId: uuid("converted_to_id"), // when they convert to a speaker/sponsor application
+    version: integer("version").default(1).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("outreach_edition_type_idx").on(table.editionId, table.targetType),
+    index("outreach_org_idx").on(table.organizationId),
+    index("outreach_followup_idx").on(table.nextFollowUp),
+  ]
+);
+
+// ─── Teams ───────────────────────────────────────────────
+
+export const teams = pgTable(
+  "teams",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => eventEditions.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(), // Program, Logistics, Sponsors, etc.
+    color: varchar("color", { length: 7 }), // hex for UI
+    sortOrder: integer("sort_order").default(0).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  }
+);
+
+export const teamMembers = pgTable(
+  "team_members",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    teamId: uuid("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    email: varchar("email", { length: 255 }),
+    role: varchar("role", { length: 100 }), // lead, member
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  }
+);
+
+// ─── Tasks ───────────────────────────────────────────────
+
+export const tasks = pgTable(
+  "tasks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => eventEditions.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").references(() => teams.id, { onDelete: "set null" }),
+    title: varchar("title", { length: 500 }).notNull(),
+    description: text("description"),
+    status: varchar("status", { length: 50 }).default("todo").notNull(), // todo, in_progress, done, blocked
+    priority: varchar("priority", { length: 20 }).default("medium").notNull(), // low, medium, high, urgent
+    assigneeId: uuid("assignee_id").references(() => users.id, { onDelete: "set null" }),
+    assigneeName: varchar("assignee_name", { length: 255 }), // fallback if no user account
+    dueDate: timestamp("due_date"),
+    linkedEntityType: varchar("linked_entity_type", { length: 50 }), // speaker, sponsor, venue, session, etc.
+    linkedEntityId: uuid("linked_entity_id"),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    version: integer("version").default(1).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("task_edition_team_idx").on(table.editionId, table.teamId),
+    index("task_assignee_idx").on(table.assigneeId),
+    index("task_due_idx").on(table.dueDate),
+    index("task_org_idx").on(table.organizationId),
+  ]
+);
+
+// ─── Invitations / Guest Allocations ─────────────────────
+
+export const invitations = pgTable(
+  "invitations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => eventEditions.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    email: varchar("email", { length: 255 }),
+    type: varchar("type", { length: 50 }).notNull(), // special_guest, speaker_invitee, organizer_invitee, student, vip
+    invitedBy: varchar("invited_by", { length: 255 }), // who invited them
+    sourceType: varchar("source_type", { length: 50 }), // speaker, organizer, direct
+    sourceId: uuid("source_id"), // speaker or organizer who used their allocation
+    status: varchar("status", { length: 50 }).default("pending").notNull(), // pending, sent, accepted, declined
+    qrHash: varchar("qr_hash", { length: 64 }),
+    checkedIn: boolean("checked_in").default(false).notNull(),
+    checkedInAt: timestamp("checked_in_at"),
+    notes: text("notes"),
+    version: integer("version").default(1).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("invitation_edition_idx").on(table.editionId),
+    index("invitation_org_idx").on(table.organizationId),
+    index("invitation_source_idx").on(table.sourceType, table.sourceId),
+    index("invitation_qr_idx").on(table.editionId, table.qrHash),
+  ]
+);
+
 // ─── Volunteer Applications ──────────────────────────────
 
 export const volunteerApplications = pgTable(
