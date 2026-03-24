@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,8 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PipelineFilters, StageBadge, SourceBadge, usePipelineFilters } from "@/components/pipeline-view";
-import { Mic2, Copy, Check, ExternalLink, Plus, X, Trash2 } from "lucide-react";
+import { PipelineFilters, usePipelineFilters } from "@/components/pipeline-view";
+import { PipelineTable } from "@/components/pipeline-table";
+import { Mic2, Copy, Check, ExternalLink, Plus, X } from "lucide-react";
 
 type Speaker = {
   id: string;
@@ -22,20 +22,22 @@ type Speaker = {
   email: string;
   talkTitle: string;
   company: string | null;
+  title: string | null;
   status: string;
   reviewScore: number | null;
   source: string;
   stage: string;
   assignedTo: string | null;
+  trackPreference: string | null;
   createdAt: Date;
 };
 
 export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[] }) {
   const { source, stage, setSource, setStage, filter } = usePipelineFilters();
+  const [speakers, setSpeakers] = useState(initialSpeakers);
   const [copied, setCopied] = useState(false);
   const [showForm, setShowForm] = useState(false);
 
-  const speakers = initialSpeakers;
   const filtered = filter(speakers);
 
   const handleCopyCfp = () => {
@@ -44,33 +46,77 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleStatusChange = async (id: string, newStage: string) => {
-    await fetch(`/api/speakers/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", "If-Match": "1" },
-      body: JSON.stringify({ status: newStage === "confirmed" ? "accepted" : newStage === "declined" ? "rejected" : "pending" }),
-    });
-    window.location.reload();
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm("Remove this speaker?")) return;
-    await fetch(`/api/speakers/${id}`, { method: "DELETE" });
-    window.location.reload();
-  };
+  // Refresh data without full page reload
+  const refreshData = useCallback(async () => {
+    const res = await fetch("/api/speakers?editionId=all");
+    if (res.ok) {
+      const json = await res.json();
+      if (json.data) setSpeakers(json.data);
+    } else {
+      // Fallback: reload page
+      window.location.reload();
+    }
+  }, []);
 
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     const data = Object.fromEntries(form);
-    await fetch("/api/speakers", {
+    const res = await fetch("/api/speakers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    setShowForm(false);
-    window.location.reload();
+    if (res.ok) {
+      const json = await res.json();
+      setSpeakers((prev) => [json.data, ...prev]);
+      setShowForm(false);
+    }
   };
+
+  const columns = [
+    {
+      key: "name",
+      label: "Speaker",
+      width: "200px",
+      render: (s: Speaker) => (
+        <div>
+          <p className="font-medium text-sm">{s.name}</p>
+          <p className="text-xs text-muted-foreground">{s.email || "No email"}</p>
+        </div>
+      ),
+    },
+    {
+      key: "company",
+      label: "Company",
+      width: "140px",
+      render: (s: Speaker) => (
+        <span className="text-xs text-muted-foreground">{s.company || "—"}</span>
+      ),
+    },
+    {
+      key: "talk",
+      label: "Talk",
+      render: (s: Speaker) => (
+        <div>
+          <p className="text-xs">{s.talkTitle || "TBD"}</p>
+          {s.trackPreference && (
+            <p className="text-[10px] text-muted-foreground">{s.trackPreference}</p>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "score",
+      label: "Score",
+      width: "60px",
+      render: (s: Speaker) => (
+        <span className="text-xs tabular-nums font-medium">
+          {s.reviewScore ? (s.reviewScore / 10).toFixed(1) : "—"}
+        </span>
+      ),
+    },
+  ];
 
   return (
     <div>
@@ -126,7 +172,7 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
                 </div>
                 <div className="space-y-1.5">
                   <Label>Assigned To</Label>
-                  <Input name="assignedTo" placeholder="Team member name" />
+                  <Input name="assignedTo" placeholder="Team member" />
                 </div>
               </div>
               <Button type="submit" className="w-full sm:w-auto">Add Speaker</Button>
@@ -145,7 +191,7 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
         onStageChange={setStage}
       />
 
-      {/* Speaker list */}
+      {/* Table view */}
       {speakers.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
@@ -158,59 +204,17 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-2">
-          {filtered.map((speaker) => (
-            <Card key={speaker.id} className="hover:border-yellow-500/30 transition-colors">
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium truncate">{speaker.name}</p>
-                      <StageBadge stage={speaker.stage} />
-                      <SourceBadge source={speaker.source} />
-                      {speaker.status && speaker.status !== "pending" && (
-                        <Badge variant="outline" className="text-[10px]">{speaker.status}</Badge>
-                      )}
-                    </div>
-                    <p className="text-sm text-muted-foreground truncate mt-0.5">
-                      {speaker.talkTitle || "Talk TBD"}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                      {speaker.company && <span>{speaker.company}</span>}
-                      {speaker.assignedTo && (
-                        <span className="text-yellow-600">Assigned: {speaker.assignedTo}</span>
-                      )}
-                      <span>{new Date(speaker.createdAt).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                  {speaker.reviewScore && (
-                    <div className="text-right shrink-0">
-                      <p className="text-lg font-semibold tabular-nums">{(speaker.reviewScore / 10).toFixed(1)}</p>
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Score</p>
-                    </div>
-                  )}
-                </div>
-                <div className="flex gap-2 mt-3 sm:justify-end">
-                  <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(speaker.id)}>
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                  {speaker.stage === "lead" && (
-                    <Button size="sm" variant="outline" className="flex-1 sm:flex-none" onClick={() => handleStatusChange(speaker.id, "engaged")}>Engage</Button>
-                  )}
-                  {(speaker.stage === "lead" || speaker.stage === "engaged") && (
-                    <>
-                      <Button size="sm" variant="outline" className="flex-1 sm:flex-none" onClick={() => handleStatusChange(speaker.id, "declined")}>Decline</Button>
-                      <Button size="sm" className="flex-1 sm:flex-none" onClick={() => handleStatusChange(speaker.id, "confirmed")}>Confirm</Button>
-                    </>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-          {filtered.length === 0 && (
-            <p className="text-center text-sm text-muted-foreground py-8">No speakers match the current filters.</p>
-          )}
-        </div>
+        <PipelineTable
+          items={filtered}
+          columns={columns}
+          entityName="speaker"
+          apiEndpoint="/api/speakers"
+          onUpdate={refreshData}
+        />
+      )}
+
+      {filtered.length === 0 && speakers.length > 0 && (
+        <p className="text-center text-sm text-muted-foreground py-8">No speakers match the current filters.</p>
       )}
     </div>
   );
