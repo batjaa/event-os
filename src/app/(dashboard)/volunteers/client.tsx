@@ -16,6 +16,7 @@ import {
 import { PipelineFilters, usePipelineFilters } from "@/components/pipeline-view";
 import { PipelineTable } from "@/components/pipeline-table";
 import { EntityDrawer } from "@/components/entity-drawer";
+import { FileUpload } from "@/components/file-upload";
 import { Copy, Check, Plus, X } from "lucide-react";
 
 type Volunteer = {
@@ -32,6 +33,7 @@ type Volunteer = {
   status: string;
   source: string;
   stage: string;
+  headshotUrl: string | null;
   assignedTo: string | null;
 };
 
@@ -121,6 +123,7 @@ export function VolunteersClient({ initialVolunteers }: { initialVolunteers: Vol
       source: volunteer.source || "intake",
       stage: volunteer.stage || "lead",
       assignedTo: volunteer.assignedTo || "",
+      headshotUrl: volunteer.headshotUrl || "",
     });
   };
 
@@ -165,6 +168,12 @@ export function VolunteersClient({ initialVolunteers }: { initialVolunteers: Vol
           label: "Profile",
           content: (
             <div className="space-y-3">
+              <FileUpload
+                value={(drawerForm.headshotUrl as string) || ""}
+                onChange={(url) => updateField("headshotUrl", url)}
+                folder="volunteer-photos"
+                label="Photo"
+              />
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Name</Label>

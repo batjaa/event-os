@@ -16,6 +16,7 @@ import {
 import { PipelineFilters, usePipelineFilters } from "@/components/pipeline-view";
 import { PipelineTable } from "@/components/pipeline-table";
 import { EntityDrawer } from "@/components/entity-drawer";
+import { FileUpload } from "@/components/file-upload";
 import { Plus, X } from "lucide-react";
 
 type MediaPartner = {
@@ -113,6 +114,7 @@ export function MediaClient({ initialPartners }: { initialPartners: MediaPartner
       source: partner.source || "intake",
       stage: partner.stage || "lead",
       assignedTo: partner.assignedTo || "",
+      logoUrl: partner.logoUrl || "",
     });
   };
 
@@ -157,6 +159,12 @@ export function MediaClient({ initialPartners }: { initialPartners: MediaPartner
           label: "Partner",
           content: (
             <div className="space-y-3">
+              <FileUpload
+                value={(drawerForm.logoUrl as string) || ""}
+                onChange={(url) => updateField("logoUrl", url)}
+                folder="media-logos"
+                label="Company Logo"
+              />
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Company Name</Label>

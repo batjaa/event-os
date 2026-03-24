@@ -17,6 +17,8 @@ import {
 import { PipelineFilters, usePipelineFilters } from "@/components/pipeline-view";
 import { PipelineTable } from "@/components/pipeline-table";
 import { EntityDrawer } from "@/components/entity-drawer";
+import { FileUpload } from "@/components/file-upload";
+import { ImageGalleryUpload } from "@/components/image-gallery-upload";
 import { Plus, Check, X } from "lucide-react";
 
 type Venue = {
@@ -34,6 +36,10 @@ type Venue = {
   pros: string | null;
   cons: string | null;
   notes: string | null;
+  mainImageUrl: string | null;
+  interiorPhotos: string[] | null;
+  exteriorPhotos: string[] | null;
+  floorPlanUrl: string | null;
   source: string;
   stage: string;
 };
@@ -44,7 +50,7 @@ export function VenueClient({ initialVenues }: { initialVenues: Venue[] }) {
   const [showForm, setShowForm] = useState(false);
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
   const [drawerSaving, setDrawerSaving] = useState(false);
-  const [drawerForm, setDrawerForm] = useState<Record<string, string | null>>({});
+  const [drawerForm, setDrawerForm] = useState<Record<string, string | null | string[]>>({});
   const finalized = venues.find((v) => v.isFinalized);
   const filtered = filter(venues).filter((v) => !v.isFinalized);
 
@@ -115,14 +121,18 @@ export function VenueClient({ initialVenues }: { initialVenues: Venue[] }) {
       pros: venue.pros || "",
       cons: venue.cons || "",
       notes: venue.notes || "",
+      mainImageUrl: venue.mainImageUrl || "",
+      interiorPhotos: venue.interiorPhotos || [],
+      exteriorPhotos: venue.exteriorPhotos || [],
+      floorPlanUrl: venue.floorPlanUrl || "",
       source: venue.source || "intake",
       stage: venue.stage || "lead",
       assignedTo: venue.assignedTo || "",
     });
   };
 
-  const updateField = (field: string, value: string | null) => {
-    setDrawerForm((prev) => ({ ...prev, [field]: value || "" }));
+  const updateField = (field: string, value: string | null | string[]) => {
+    setDrawerForm((prev) => ({ ...prev, [field]: Array.isArray(value) ? value : (value || "") }));
   };
 
   const handleDrawerSave = async () => {
@@ -214,6 +224,47 @@ export function VenueClient({ initialVenues }: { initialVenues: Venue[] }) {
               <div className="space-y-1.5">
                 <Label>Notes</Label>
                 <Textarea rows={4} placeholder="Additional notes..." value={(drawerForm.notes as string) || ""} onChange={(e) => updateField("notes", e.target.value)} />
+              </div>
+            </div>
+          ),
+        },
+        {
+          label: "Photos",
+          content: (
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <FileUpload
+                  value={(drawerForm.mainImageUrl as string) || ""}
+                  onChange={(url) => updateField("mainImageUrl", url)}
+                  folder="venues/main"
+                  label="Main Image"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <ImageGalleryUpload
+                  images={(drawerForm.interiorPhotos as unknown as string[]) || []}
+                  onChange={(urls) => updateField("interiorPhotos", urls as unknown as string)}
+                  folder="venues/interior"
+                  label="Interior Photos"
+                  maxImages={10}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <ImageGalleryUpload
+                  images={(drawerForm.exteriorPhotos as unknown as string[]) || []}
+                  onChange={(urls) => updateField("exteriorPhotos", urls as unknown as string)}
+                  folder="venues/exterior"
+                  label="Exterior Photos"
+                  maxImages={10}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <FileUpload
+                  value={(drawerForm.floorPlanUrl as string) || ""}
+                  onChange={(url) => updateField("floorPlanUrl", url)}
+                  folder="venues/floorplans"
+                  label="Floor Plan"
+                />
               </div>
             </div>
           ),

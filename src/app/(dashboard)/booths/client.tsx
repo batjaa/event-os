@@ -16,6 +16,7 @@ import {
 import { PipelineFilters, usePipelineFilters } from "@/components/pipeline-view";
 import { PipelineTable } from "@/components/pipeline-table";
 import { EntityDrawer } from "@/components/entity-drawer";
+import { FileUpload } from "@/components/file-upload";
 import { Plus, X } from "lucide-react";
 
 type Booth = {
@@ -30,6 +31,7 @@ type Booth = {
   sponsorId: string | null;
   source: string;
   stage: string;
+  companyLogoUrl: string | null;
   assignedTo: string | null;
 };
 
@@ -100,6 +102,7 @@ export function BoothsClient({ initialBooths }: { initialBooths: Booth[] }) {
     setSelectedBooth(booth);
     setDrawerForm({
       name: booth.name || "",
+      companyLogoUrl: booth.companyLogoUrl || "",
       location: booth.location || "",
       size: booth.size || "standard",
       equipment: booth.equipment || "",
@@ -151,11 +154,17 @@ export function BoothsClient({ initialBooths }: { initialBooths: Booth[] }) {
           label: "Booth",
           content: (
             <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label>Name</Label>
+                <Input value={(drawerForm.name as string) || ""} onChange={(e) => updateField("name", e.target.value)} />
+              </div>
+              <FileUpload
+                value={(drawerForm.companyLogoUrl as string) || ""}
+                onChange={(url) => updateField("companyLogoUrl", url)}
+                folder="booth-logos"
+                label="Company Logo"
+              />
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label>Name</Label>
-                  <Input value={(drawerForm.name as string) || ""} onChange={(e) => updateField("name", e.target.value)} />
-                </div>
                 <div className="space-y-1.5">
                   <Label>Location</Label>
                   <Input value={(drawerForm.location as string) || ""} onChange={(e) => updateField("location", e.target.value)} />

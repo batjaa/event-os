@@ -217,6 +217,7 @@ export const sponsorApplications = pgTable(
     companyName: varchar("company_name", { length: 255 }).notNull(),
     contactName: varchar("contact_name", { length: 255 }).notNull(),
     contactEmail: varchar("contact_email", { length: 255 }).notNull(),
+    logoUrl: text("logo_url"),
     packagePreference: varchar("package_preference", { length: 100 }),
     message: text("message"),
     status: varchar("status", { length: 50 }).default("pending").notNull(),
@@ -309,7 +310,10 @@ export const venues = pgTable(
     assignedTo: varchar("assigned_to", { length: 255 }), // organizer responsible
     pros: text("pros"),
     cons: text("cons"),
-    photos: jsonb("photos").$type<string[]>(), // array of URLs
+    mainImageUrl: text("main_image_url"),
+    interiorPhotos: jsonb("interior_photos").$type<string[]>(),
+    exteriorPhotos: jsonb("exterior_photos").$type<string[]>(),
+    floorPlanUrl: text("floor_plan_url"),
     notes: text("notes"),
     source: varchar("source", { length: 50 }).default("intake").notNull(),
     stage: varchar("stage", { length: 50 }).default("lead").notNull(),
@@ -481,6 +485,7 @@ export const volunteerApplications = pgTable(
     name: varchar("name", { length: 255 }).notNull(),
     email: varchar("email", { length: 255 }).notNull(),
     phone: varchar("phone", { length: 50 }),
+    headshotUrl: text("headshot_url"),
     role: varchar("role", { length: 100 }), // registration, stage, logistics, etc.
     availability: text("availability"), // which days/shifts
     experience: text("experience"),
@@ -514,6 +519,7 @@ export const booths = pgTable(
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 255 }).notNull(), // e.g., "Booth A1"
+    companyLogoUrl: text("company_logo_url"),
     location: varchar("location", { length: 255 }), // e.g., "Hall B, Row 2"
     size: varchar("size", { length: 50 }), // small, medium, large, premium
     price: integer("price"), // in smallest currency unit

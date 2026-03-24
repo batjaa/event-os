@@ -30,6 +30,7 @@ type Sponsor = {
   source: string;
   stage: string;
   assignedTo: string | null;
+  logoUrl: string | null;
   createdAt: Date;
 };
 
@@ -56,6 +57,7 @@ export function SponsorsClient({ initialSponsors }: { initialSponsors: Sponsor[]
       source: sponsor.source || "intake",
       stage: sponsor.stage || "lead",
       assignedTo: sponsor.assignedTo || "",
+      logoUrl: sponsor.logoUrl || "",
     });
   };
 
@@ -123,6 +125,12 @@ export function SponsorsClient({ initialSponsors }: { initialSponsors: Sponsor[]
           label: "Company",
           content: (
             <div className="space-y-3">
+              <FileUpload
+                value={(drawerForm.logoUrl as string) || ""}
+                onChange={(url) => updateField("logoUrl", url)}
+                folder="sponsor-logos"
+                label="Company Logo"
+              />
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Company Name</Label>
