@@ -103,11 +103,19 @@ export function ChatPanel({
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
     setInput("");
     setLoading(true);
 
     const inputType = detectInputType(input);
+
+    // Build conversation context from last 10 messages (sliding window)
+    const recentMessages = updatedMessages
+      .filter((m) => m.id !== "welcome")
+      .slice(-10)
+      .map((m) => `${m.role === "user" ? "User" : "Agent"}: ${m.content}`)
+      .join("\n");
 
     try {
       const res = await fetch("/api/agent/process", {
@@ -116,7 +124,8 @@ export function ChatPanel({
         body: JSON.stringify({
           input,
           inputType,
-          editionId: "active", // resolved server-side via getActiveIds()
+          editionId: "active",
+          context: recentMessages || undefined,
         }),
       });
 

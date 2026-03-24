@@ -41,10 +41,11 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { input, inputType, editionId } = body as {
+  const { input, inputType, editionId, context } = body as {
     input: string;
     inputType: InputType;
     editionId: string;
+    context?: string;
   };
 
   if (!input || !editionId) {
@@ -65,7 +66,8 @@ export async function POST(req: NextRequest) {
     const provider = getProvider();
     const result = await provider.extract(
       input,
-      inputType || "text"
+      inputType || "text",
+      context
     );
 
     // Inject organizationId and editionId into all action payloads
