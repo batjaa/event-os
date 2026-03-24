@@ -46,6 +46,7 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
   const [showForm, setShowForm] = useState(false);
   const [selectedSpeaker, setSelectedSpeaker] = useState<Speaker | null>(null);
   const [drawerSaving, setDrawerSaving] = useState(false);
+  const [drawerForm, setDrawerForm] = useState<Record<string, string>>({});
 
   const filtered = filter(speakers);
 
@@ -60,54 +61,74 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
     window.location.reload();
   }, []);
 
-  // Drawer save
+  // Initialize form state when speaker is selected
+  const openDrawer = (speaker: Speaker) => {
+    setSelectedSpeaker(speaker);
+    setDrawerForm({
+      name: speaker.name || "",
+      email: speaker.email || "",
+      company: speaker.company || "",
+      title: speaker.title || "",
+      bio: speaker.bio || "",
+      talkTitle: speaker.talkTitle || "",
+      talkAbstract: speaker.talkAbstract || "",
+      talkType: speaker.talkType || "talk",
+      trackPreference: speaker.trackPreference || "",
+      source: speaker.source || "intake",
+      stage: speaker.stage || "lead",
+      assignedTo: speaker.assignedTo || "",
+      reviewNotes: speaker.reviewNotes || "",
+    });
+  };
+
+  const updateField = (field: string, value: string | null) => {
+    setDrawerForm((prev) => ({ ...prev, [field]: value || "" }));
+  };
+
+  // Drawer save — sends all form state fields
   const handleDrawerSave = async () => {
     if (!selectedSpeaker) return;
     setDrawerSaving(true);
-    const form = document.getElementById("speaker-drawer-form") as HTMLFormElement;
-    if (form) {
-      const data = Object.fromEntries(new FormData(form));
-      await fetch(`/api/speakers/${selectedSpeaker.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", "If-Match": "999" },
-        body: JSON.stringify(data),
-      });
-    }
+    await fetch(`/api/speakers/${selectedSpeaker.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "If-Match": "999" },
+      body: JSON.stringify(drawerForm),
+    });
     setDrawerSaving(false);
     setSelectedSpeaker(null);
     refreshData();
   };
 
-  // Speaker drawer sections
+  // Speaker drawer sections — all controlled via drawerForm state
   const drawerSections = selectedSpeaker
     ? [
         {
           label: "Profile",
           content: (
-            <form id="speaker-drawer-form" className="space-y-3">
+            <div className="space-y-3">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Name</Label>
-                  <Input name="name" defaultValue={selectedSpeaker.name} />
+                  <Input value={drawerForm.name || ""} onChange={(e) => updateField("name", e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Email</Label>
-                  <Input name="email" defaultValue={selectedSpeaker.email || ""} />
+                  <Input value={drawerForm.email || ""} onChange={(e) => updateField("email", e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Company</Label>
-                  <Input name="company" defaultValue={selectedSpeaker.company || ""} />
+                  <Input value={drawerForm.company || ""} onChange={(e) => updateField("company", e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Title</Label>
-                  <Input name="title" defaultValue={selectedSpeaker.title || ""} />
+                  <Input value={drawerForm.title || ""} onChange={(e) => updateField("title", e.target.value)} />
                 </div>
               </div>
               <div className="space-y-1.5">
                 <Label>Bio</Label>
-                <Textarea name="bio" rows={4} placeholder="Speaker bio..." defaultValue={selectedSpeaker.bio || ""} />
+                <Textarea rows={4} placeholder="Speaker bio..." value={drawerForm.bio || ""} onChange={(e) => updateField("bio", e.target.value)} />
               </div>
-            </form>
+            </div>
           ),
         },
         {
@@ -116,16 +137,16 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label>Talk Title</Label>
-                <Input name="talkTitle" defaultValue={selectedSpeaker.talkTitle || ""} form="speaker-drawer-form" />
+                <Input value={drawerForm.talkTitle || ""} onChange={(e) => updateField("talkTitle", e.target.value)} />
               </div>
               <div className="space-y-1.5">
                 <Label>Abstract</Label>
-                <Textarea name="talkAbstract" rows={6} placeholder="Talk abstract..." defaultValue={selectedSpeaker.talkAbstract || ""} form="speaker-drawer-form" />
+                <Textarea rows={6} placeholder="Talk abstract..." value={drawerForm.talkAbstract || ""} onChange={(e) => updateField("talkAbstract", e.target.value)} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Type</Label>
-                  <Select name="talkType" defaultValue={selectedSpeaker.talkType || "talk"}>
+                  <Select value={String(drawerForm.talkType || "talk")} onValueChange={(v) => updateField("talkType", v)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="talk">Talk</SelectItem>
@@ -137,7 +158,7 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
                 </div>
                 <div className="space-y-1.5">
                   <Label>Track</Label>
-                  <Input name="trackPreference" defaultValue={selectedSpeaker.trackPreference || ""} form="speaker-drawer-form" />
+                  <Input value={drawerForm.trackPreference || ""} onChange={(e) => updateField("trackPreference", e.target.value)} />
                 </div>
               </div>
             </div>
@@ -160,6 +181,7 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
                 <Label>Special Requirements</Label>
                 <Textarea rows={3} placeholder="Any other requirements..." />
               </div>
+              <p className="text-xs text-muted-foreground italic">Requirements persistence coming soon — needs a dedicated DB column.</p>
             </div>
           ),
         },
@@ -170,7 +192,7 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Source</Label>
-                  <Select name="source" defaultValue={selectedSpeaker.source}>
+                  <Select value={String(drawerForm.source || "intake")} onValueChange={(v) => updateField("source", v)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="intake">Intake</SelectItem>
@@ -181,7 +203,7 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
                 </div>
                 <div className="space-y-1.5">
                   <Label>Stage</Label>
-                  <Select name="stage" defaultValue={selectedSpeaker.stage}>
+                  <Select value={String(drawerForm.stage || "lead")} onValueChange={(v) => updateField("stage", v)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="lead">Lead</SelectItem>
@@ -194,11 +216,11 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
               </div>
               <div className="space-y-1.5">
                 <Label>Assigned To</Label>
-                <Input name="assignedTo" defaultValue={selectedSpeaker.assignedTo || ""} form="speaker-drawer-form" />
+                <Input value={drawerForm.assignedTo || ""} onChange={(e) => updateField("assignedTo", e.target.value)} />
               </div>
               <div className="space-y-1.5">
                 <Label>Review Notes</Label>
-                <Textarea name="reviewNotes" rows={4} placeholder="Internal notes..." defaultValue={selectedSpeaker.reviewNotes || ""} form="speaker-drawer-form" />
+                <Textarea rows={4} placeholder="Internal notes..." value={drawerForm.reviewNotes || ""} onChange={(e) => updateField("reviewNotes", e.target.value)} />
               </div>
             </div>
           ),
@@ -358,7 +380,7 @@ export function SpeakersClient({ initialSpeakers }: { initialSpeakers: Speaker[]
           entityName="speaker"
           apiEndpoint="/api/speakers"
           onUpdate={refreshData}
-          onRowClick={(speaker) => setSelectedSpeaker(speaker)}
+          onRowClick={(speaker) => openDrawer(speaker)}
         />
       )}
 
