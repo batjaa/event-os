@@ -618,6 +618,31 @@ export const campaigns = pgTable(
 
 // ─── Audit Log ───────────────────────────────────────────
 
+// ─── Entity Notes / Discussion Thread ────────────────────
+
+export const entityNotes = pgTable(
+  "entity_notes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    entityType: varchar("entity_type", { length: 50 }).notNull(), // speaker, sponsor, venue, etc.
+    entityId: uuid("entity_id").notNull(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    authorName: varchar("author_name", { length: 255 }).notNull(),
+    authorEmail: varchar("author_email", { length: 255 }),
+    content: text("content").notNull(), // markdown supported
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("note_entity_idx").on(table.entityType, table.entityId),
+    index("note_org_idx").on(table.organizationId),
+  ]
+);
+
+// ─── Audit Log ───────────────────────────────────────────
+
 export const auditLog = pgTable(
   "audit_log",
   {

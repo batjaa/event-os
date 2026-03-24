@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/confirm-dialog";
+import { NotesButton, NotesPanel } from "@/components/notes-panel";
 import { Trash2, MoreHorizontal } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────
@@ -150,6 +151,7 @@ export function PipelineTable<
 >({ items, columns, entityName, apiEndpoint, idEndpoint, onUpdate, onRowClick }: PipelineTableProps<T>) {
   const patchEndpoint = idEndpoint || apiEndpoint;
   const { confirm } = useConfirm();
+  const [notesOpenFor, setNotesOpenFor] = useState<string | null>(null);
 
   const handlePatch = async (id: string, field: string, value: string) => {
     await fetch(`${patchEndpoint}/${id}`, {
@@ -199,6 +201,9 @@ export function PipelineTable<
             <th className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wider text-stone-500 w-[120px]">
               Assigned To
             </th>
+            <th className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wider text-stone-500 w-[50px]">
+              Notes
+            </th>
             <th className="px-3 py-2 w-[40px]" />
           </tr>
         </thead>
@@ -235,6 +240,12 @@ export function PipelineTable<
                   onSave={(val) => handlePatch(item.id, "assignedTo", val)}
                 />
               </td>
+              <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                <NotesButton
+                  count={0}
+                  onClick={() => setNotesOpenFor(item.id)}
+                />
+              </td>
               <td className="px-3 py-1" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => handleDelete(item.id)}
@@ -247,6 +258,14 @@ export function PipelineTable<
           ))}
         </tbody>
       </table>
+
+      {/* Notes panel */}
+      <NotesPanel
+        entityType={entityName}
+        entityId={notesOpenFor || ""}
+        isOpen={!!notesOpenFor}
+        onClose={() => setNotesOpenFor(null)}
+      />
     </div>
   );
 }
