@@ -29,6 +29,8 @@ jobs:
 
       - name: Run unit & integration tests
         run: DB_DIALECT=sqlite npx vitest run tests/unit tests/integration
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
   e2e:
     name: E2E Tests
@@ -60,3 +62,4 @@ jobs:
           DB_DIALECT=sqlite SERVICE_TOKEN=ci-test-token npx vitest run tests/e2e
         env:
           PORT: 3000
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

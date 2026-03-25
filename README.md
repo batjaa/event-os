@@ -242,27 +242,71 @@ src/
 
 ## Testing
 
+Tests run against SQLite by default — no PostgreSQL or external services needed.
+
+### Quick start
+
 ```bash
-# Run all tests
-npx vitest run
+# Set up SQLite test database
+DB_DIALECT=sqlite npx drizzle-kit push --config=drizzle.config.sqlite.ts
+DB_DIALECT=sqlite npx tsx src/db/seed.ts
 
-# Run a specific test file
-npx vitest run tests/schema-sync.test.ts
+# Run unit + integration tests (no server needed)
+DB_DIALECT=sqlite npx vitest run tests/unit tests/integration
 
-# Run tests in watch mode (re-runs on file changes)
-npx vitest
+# Run all tests including e2e (needs running server)
+DB_DIALECT=sqlite AUTH_SECRET=test-secret SERVICE_TOKEN=test-token npm run dev &
+DB_DIALECT=sqlite SERVICE_TOKEN=test-token npx vitest run
+
+# Watch mode
+DB_DIALECT=sqlite npx vitest
 ```
 
-Tests that hit the database (RBAC, checklist, security, pipeline) require a running PostgreSQL with seeded data. The schema sync test runs without any database.
+### Test structure
 
-| Suite | What it covers | DB required |
-|-------|---------------|-------------|
-| `schema-sync` | PG ↔ SQLite schema parity (tables + columns) | No |
-| `rbac` | Role-based access control on all API routes | Yes (PG) |
-| `checklist` | Auto-generate, archive, restore checklist items | Yes (PG) |
-| `security` | CSO audit regression tests | Yes (PG) |
-| `pipeline` | Stage transitions, source tracking | Yes (PG) |
-| `agent-*` | Agent CRUD, prompt injection, field stripping | Yes (PG) |
+Tests are organized by scope:
+
+```
+tests/
+  unit/           # No DB, no server — pure logic
+    schema-sync   # PG ↔ SQLite schema parity
+    rbac          # Permission logic
+  integration/    # Needs seeded DB — tests functions directly
+    checklist     # Checklist lifecycle (generate, archive, restore)
+    agent-*       # Agent dispatcher, handlers, input guards, LLM security
+  e2e/            # Needs running server — tests HTTP API
+    pipeline      # CRUD lifecycle for all entity types
+    security      # Auth enforcement, bcrypt, CSO audit regressions
+```
+
+### LLM-dependent tests
+
+Some agent tests call the real Gemini API. They auto-skip when no API key is set. To run them locally:
+
+```bash
+GEMINI_API_KEY=your-key DB_DIALECT=sqlite npx vitest run tests/integration
+```
+
+### CI (GitHub Actions)
+
+Tests run automatically on push to `main` and on pull requests. The workflow uses SQLite so no database service is needed.
+
+**Two jobs:**
+- **Unit & Integration** — fast (~2s), runs `tests/unit` + `tests/integration`
+- **E2E** — builds the app, starts the production server, runs `tests/e2e`
+
+**To enable LLM tests in CI**, add your Gemini API key as a repository secret:
+
+```bash
+# Via GitHub CLI
+gh secret set GEMINI_API_KEY --repo your-org/event-os
+
+# Or go to: Settings → Secrets and variables → Actions → New repository secret
+# Name: GEMINI_API_KEY
+# Value: your-gemini-api-key
+```
+
+Without the secret, LLM tests are skipped — all other tests still run and pass.
 
 ## Security
 
