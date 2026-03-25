@@ -107,7 +107,6 @@ export function AttendeesClient({
       body: JSON.stringify(drawerForm),
     });
     setDrawerSaving(false);
-    setSelectedAttendee(null);
     refreshData();
   };
 

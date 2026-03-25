@@ -218,7 +218,6 @@ export function MediaClient({ initialPartners }: { initialPartners: MediaPartner
       body: JSON.stringify(drawerForm),
     });
     setDrawerSaving(false);
-    setSelectedPartner(null);
     refreshData();
   };
 

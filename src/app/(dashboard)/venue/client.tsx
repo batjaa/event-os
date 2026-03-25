@@ -231,7 +231,6 @@ export function VenueClient({ initialVenues }: { initialVenues: Venue[] }) {
       body: JSON.stringify(drawerForm),
     });
     setDrawerSaving(false);
-    setSelectedVenue(null);
     refreshData();
   };
 

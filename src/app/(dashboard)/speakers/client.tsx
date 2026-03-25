@@ -237,7 +237,6 @@ export function SpeakersClient({
       body: JSON.stringify(drawerForm),
     });
     setDrawerSaving(false);
-    setSelectedSpeaker(null);
     refreshData();
   };
 

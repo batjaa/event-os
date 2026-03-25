@@ -219,7 +219,6 @@ export function BoothsClient({ initialBooths }: { initialBooths: Booth[] }) {
       body: JSON.stringify(drawerForm),
     });
     setDrawerSaving(false);
-    setSelectedBooth(null);
     refreshData();
   };
 

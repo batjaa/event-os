@@ -161,7 +161,6 @@ export function SponsorsClient({ initialSponsors }: { initialSponsors: Sponsor[]
       body: JSON.stringify(drawerForm),
     });
     setDrawerSaving(false);
-    setSelectedSponsor(null);
     refreshData();
   };
 

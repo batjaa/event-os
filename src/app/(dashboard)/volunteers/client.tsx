@@ -227,7 +227,6 @@ export function VolunteersClient({ initialVolunteers }: { initialVolunteers: Vol
       body: JSON.stringify(drawerForm),
     });
     setDrawerSaving(false);
-    setSelectedVolunteer(null);
     refreshData();
   };
 
