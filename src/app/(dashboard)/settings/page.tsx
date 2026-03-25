@@ -6,12 +6,6 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { UserPlus, Trash2, Loader2 } from "lucide-react";
 
 type Tab = "event" | "team" | "telegram";
@@ -189,69 +183,78 @@ export default function SettingsPage() {
               <UserPlus className="mr-2 h-4 w-4" />
               Invite Member
             </Button>
-            <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Invite Team Member</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 pt-2">
-                  <div className="space-y-1.5">
-                    <Label>Name</Label>
-                    <Input
-                      value={inviteName}
-                      onChange={(e) => setInviteName(e.target.value)}
-                      placeholder="e.g., Tuvshin"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Email *</Label>
-                    <Input
-                      type="email"
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                      placeholder="tuvshin@devsummit.mn"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Role</Label>
-                    <select
-                      value={inviteRole}
-                      onChange={(e) => setInviteRole(e.target.value)}
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    >
-                      <option value="organizer">Organizer</option>
-                      <option value="coordinator">Coordinator</option>
-                      <option value="viewer">Viewer</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  </div>
-                  {inviteError && (
-                    <p className="text-sm text-red-600">{inviteError}</p>
-                  )}
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => setInviteOpen(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleInvite}
-                      disabled={!inviteEmail.trim() || inviting}
-                    >
-                      {inviting ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Inviting...
-                        </>
-                      ) : (
-                        "Invite"
-                      )}
-                    </Button>
+
+            {/* Invite modal */}
+            {inviteOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-50 bg-black/50"
+                  onClick={() => setInviteOpen(false)}
+                />
+                <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-background p-6 shadow-lg">
+                  <h3 className="text-lg font-semibold mb-4">
+                    Invite Team Member
+                  </h3>
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label>Name</Label>
+                      <Input
+                        value={inviteName}
+                        onChange={(e) => setInviteName(e.target.value)}
+                        placeholder="e.g., Tuvshin"
+                        autoFocus
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Email *</Label>
+                      <Input
+                        type="email"
+                        value={inviteEmail}
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                        placeholder="tuvshin@devsummit.mn"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Role</Label>
+                      <select
+                        value={inviteRole}
+                        onChange={(e) => setInviteRole(e.target.value)}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="organizer">Organizer</option>
+                        <option value="coordinator">Coordinator</option>
+                        <option value="viewer">Viewer</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </div>
+                    {inviteError && (
+                      <p className="text-sm text-red-600">{inviteError}</p>
+                    )}
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => setInviteOpen(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleInvite}
+                        disabled={!inviteEmail.trim() || inviting}
+                      >
+                        {inviting ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Inviting...
+                          </>
+                        ) : (
+                          "Invite"
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </DialogContent>
-            </Dialog>
+              </>
+            )}
           </div>
 
           {/* Members list */}
