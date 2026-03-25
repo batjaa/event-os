@@ -43,7 +43,7 @@ type Booth = {
 // ─── Portal Invite Section (on Profile tab) ─────────────
 
 function PortalInviteSection({ entityType, entityId, entityEmail }: { entityType: string; entityId: string; entityEmail: string }) {
-  const [status, setStatus] = useState<"idle" | "loading" | "invited" | "already" | "error">("idle");
+  const [status, setStatus] = useState<"checking" | "idle" | "loading" | "invited" | "already" | "error">("checking");
   const [showConfirm, setShowConfirm] = useState(false);
   const [password, setPassword] = useState("portal123");
   const [inviteInfo, setInviteInfo] = useState<{ email: string; password: string } | null>(null);
@@ -51,8 +51,8 @@ function PortalInviteSection({ entityType, entityId, entityEmail }: { entityType
   useEffect(() => {
     fetch(`/api/portal/status?entityType=${entityType}&entityId=${entityId}`)
       .then((r) => r.json())
-      .then((d) => { if (d.data?.invited) setStatus("already"); })
-      .catch(() => {});
+      .then((d) => { setStatus(d.data?.invited ? "already" : "idle"); })
+      .catch(() => setStatus("idle"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
