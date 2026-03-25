@@ -47,4 +47,5 @@ next-env.d.ts
 .env.local
 .env
 .gstack/
+.claude/worktrees
 public/uploads/
