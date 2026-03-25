@@ -9,6 +9,23 @@ import { AgentContext } from "./dispatcher";
 //  Translates structured AgentIntent into Drizzle queries.
 //  All queries are org-scoped. Results formatted as human-readable text.
 //
+//  SECURITY: internal fields are stripped from all responses.
+
+// Fields that must NEVER appear in agent responses to users
+const REDACTED_FIELDS = new Set([
+  "id", "organizationId", "editionId", "contactId", "assigneeId",
+  "version", "createdAt", "updatedAt", "password", "passwordHash",
+  "token", "secret", "hash", "apiKey", "sessionToken", "refreshToken",
+]);
+
+function stripSensitiveFields(obj: Record<string, unknown>): Record<string, unknown> {
+  const clean: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (!REDACTED_FIELDS.has(k)) clean[k] = v;
+  }
+  return clean;
+}
+//
 //  "How many speakers are confirmed?"
 //  → { action: "count", entityType: "speaker", params: { filters: { stage: "confirmed" } } }
 //  → SELECT COUNT(*) FROM speaker_applications WHERE stage='confirmed' AND org_id=?
@@ -206,7 +223,7 @@ async function handleList(
   return {
     message: `${header}\n${items.join("\n")}`,
     success: true,
-    data: { items: rows },
+    data: { items: rows.map((r: any) => stripSensitiveFields(r)) },
   };
 }
 
@@ -279,7 +296,7 @@ async function handleSearch(
     return {
       message: `Found **${name}**\n${details.join(" | ")}`,
       success: true,
-      data: { item: row },
+      data: { item: stripSensitiveFields(row) },
     };
   }
 
@@ -294,7 +311,7 @@ async function handleSearch(
   return {
     message: `Found ${rows.length} ${pluralLabel} matching "${searchValue}":\n${items.join("\n")}`,
     success: true,
-    data: { items: rows },
+    data: { items: rows.map((r: any) => stripSensitiveFields(r)) },
   };
 }
 
