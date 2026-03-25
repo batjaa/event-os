@@ -1,5 +1,5 @@
-import { LLMProvider, AgentResponse, InputType } from "../types";
-import { SYSTEM_PROMPT, buildUserPrompt } from "../prompt";
+import { LLMProvider, AgentResponse, AgentIntent, InputType } from "../types";
+import { SYSTEM_PROMPT, CLASSIFY_PROMPT, buildUserPrompt, buildClassifyPrompt } from "../prompt";
 
 export class GeminiProvider implements LLMProvider {
   name = "gemini";
@@ -11,13 +11,7 @@ export class GeminiProvider implements LLMProvider {
     this.model = model;
   }
 
-  async extract(
-    input: string,
-    inputType: InputType,
-    context?: string
-  ): Promise<AgentResponse> {
-    const userPrompt = buildUserPrompt(input, inputType);
-
+  private async call(systemPrompt: string, userPrompt: string): Promise<string> {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`,
       {
@@ -28,7 +22,7 @@ export class GeminiProvider implements LLMProvider {
             {
               role: "user",
               parts: [
-                { text: SYSTEM_PROMPT + (context ? `\n\nConversation context:\n${context}` : "") },
+                { text: systemPrompt },
                 { text: userPrompt },
               ],
             },
@@ -47,8 +41,12 @@ export class GeminiProvider implements LLMProvider {
     }
 
     const data = await response.json();
-    const text =
-      data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+  }
+
+  async extract(input: string, inputType: InputType, context?: string): Promise<AgentResponse> {
+    const systemPrompt = SYSTEM_PROMPT + (context ? `\n\nConversation context:\n${context}` : "");
+    const text = await this.call(systemPrompt, buildUserPrompt(input, inputType));
 
     try {
       return JSON.parse(text) as AgentResponse;
@@ -58,6 +56,35 @@ export class GeminiProvider implements LLMProvider {
         entities: [],
         actions: [],
         questions: ["Could you paste the data in a different format?"],
+      };
+    }
+  }
+
+  async classify(input: string, context?: string): Promise<AgentIntent> {
+    const text = await this.call(CLASSIFY_PROMPT, buildClassifyPrompt(input, context));
+
+    try {
+      const parsed = JSON.parse(text);
+      return {
+        intent: parsed.intent || "chitchat",
+        entityType: parsed.entityType || null,
+        action: parsed.action || null,
+        params: parsed.params || {},
+        searchBy: parsed.searchBy || null,
+        searchValue: parsed.searchValue || null,
+        message: parsed.message || "I'm not sure what you meant.",
+        confirmation: parsed.confirmation || false,
+      };
+    } catch {
+      return {
+        intent: "chitchat",
+        entityType: null,
+        action: null,
+        params: {},
+        searchBy: null,
+        searchValue: null,
+        message: "I didn't understand that. Try: 'how many speakers are confirmed?' or 'add speaker Sarah K.'",
+        confirmation: false,
       };
     }
   }

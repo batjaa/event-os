@@ -32,6 +32,27 @@ export type AgentResponse = {
 
 export type InputType = "text" | "csv" | "file";
 
+// ─── Agent Intelligence Types ────────────────────────
+
+export type AgentIntent = {
+  intent: "manage" | "query" | "extract" | "chitchat";
+  entityType: EntityType | null;
+  action: "create" | "update" | "delete" | "list" | "count" | "search" | null;
+  params: Record<string, unknown>;
+  searchBy: "name" | "email" | "company" | null;
+  searchValue: string | null;
+  message: string;
+  confirmation: boolean;
+};
+
+export type DispatchResult = {
+  message: string;
+  success: boolean;
+  data?: unknown;
+  requiresConfirmation?: boolean;
+  pendingAction?: AgentIntent;
+};
+
 export interface LLMProvider {
   name: string;
   extract(
@@ -39,4 +60,8 @@ export interface LLMProvider {
     inputType: InputType,
     context?: string
   ): Promise<AgentResponse>;
+  classify(
+    input: string,
+    context?: string
+  ): Promise<AgentIntent>;
 }

@@ -1,4 +1,5 @@
-import { LLMProvider, AgentResponse, InputType } from "../types";
+import { LLMProvider, AgentResponse, AgentIntent, InputType } from "../types";
+import { CLASSIFY_PROMPT, buildClassifyPrompt } from "../prompt";
 
 const COMPACT_SYSTEM_PROMPT = `You extract event management entities from user input. Return ONLY valid JSON.
 
@@ -27,22 +28,15 @@ export class OllamaProvider implements LLMProvider {
     this.model = model;
   }
 
-  async extract(
-    input: string,
-    inputType: InputType,
-    context?: string
-  ): Promise<AgentResponse> {
-    const typeHint = inputType === "csv" ? "(This is tabular/CSV data)" : "";
-
+  private async call(systemPrompt: string, userPrompt: string): Promise<string> {
     const response = await fetch(`${this.baseUrl}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model: this.model,
         messages: [
-          { role: "system", content: COMPACT_SYSTEM_PROMPT },
-          ...(context ? [{ role: "assistant", content: `Previous context: ${context}` }] : []),
-          { role: "user", content: `${typeHint}\n${input}\n\nReturn JSON only.` },
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
         ],
         stream: false,
         format: "json",
@@ -55,7 +49,18 @@ export class OllamaProvider implements LLMProvider {
     }
 
     const data = await response.json();
-    const raw = data.message?.content || "{}";
+    return data.message?.content || "{}";
+  }
+
+  async extract(
+    input: string,
+    inputType: InputType,
+    context?: string
+  ): Promise<AgentResponse> {
+    const typeHint = inputType === "csv" ? "(This is tabular/CSV data)" : "";
+    const contextMessages = context ? `Previous context: ${context}\n\n` : "";
+    const userPrompt = `${contextMessages}${typeHint}\n${input}\n\nReturn JSON only.`;
+    const raw = await this.call(COMPACT_SYSTEM_PROMPT, userPrompt);
 
     try {
       const parsed = JSON.parse(raw);
@@ -88,6 +93,35 @@ export class OllamaProvider implements LLMProvider {
         entities: [],
         actions: [],
         questions: ["Try: one entity per line, with name and email separated by commas."],
+      };
+    }
+  }
+
+  async classify(input: string, context?: string): Promise<AgentIntent> {
+    const text = await this.call(CLASSIFY_PROMPT, buildClassifyPrompt(input, context));
+
+    try {
+      const parsed = JSON.parse(text);
+      return {
+        intent: parsed.intent || "chitchat",
+        entityType: parsed.entityType || null,
+        action: parsed.action || null,
+        params: parsed.params || {},
+        searchBy: parsed.searchBy || null,
+        searchValue: parsed.searchValue || null,
+        message: parsed.message || "I'm not sure what you meant.",
+        confirmation: parsed.confirmation || false,
+      };
+    } catch {
+      return {
+        intent: "chitchat",
+        entityType: null,
+        action: null,
+        params: {},
+        searchBy: null,
+        searchValue: null,
+        message: "I didn't understand that. Try: 'how many speakers are confirmed?' or 'add speaker Sarah K.'",
+        confirmation: false,
       };
     }
   }
