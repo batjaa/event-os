@@ -15,8 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Calendar, User, X, GripVertical, MessageSquare } from "lucide-react";
-import { NotesButton, NotesPanel } from "@/components/notes-panel";
+import { Plus, Calendar, User, X } from "lucide-react";
 import { useConfirm } from "@/components/confirm-dialog";
 
 type TaskStatus = "todo" | "in_progress" | "done" | "blocked";
@@ -60,7 +59,6 @@ export function TasksClient({ initialTasks, initialTeams }: { initialTasks: Task
   const [showCreate, setShowCreate] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
-  const [notesOpenFor, setNotesOpenFor] = useState<string | null>(null);
   const [teams, setTeams] = useState(initialTeams);
   const [showNewTeam, setShowNewTeam] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
@@ -313,17 +311,8 @@ export function TasksClient({ initialTasks, initialTeams }: { initialTasks: Task
           teams={teams}
           onClose={() => setSelectedTask(null)}
           onUpdate={(updates) => handleUpdateTask(selectedTask.id, updates)}
-          onOpenNotes={() => setNotesOpenFor(selectedTask.id)}
         />
       )}
-
-      {/* Notes panel */}
-      <NotesPanel
-        entityType="task"
-        entityId={notesOpenFor || ""}
-        isOpen={!!notesOpenFor}
-        onClose={() => setNotesOpenFor(null)}
-      />
     </div>
   );
 }
@@ -542,14 +531,40 @@ function TaskDetailDrawer({
   teams,
   onClose,
   onUpdate,
-  onOpenNotes,
 }: {
   task: Task;
   teams: Team[];
   onClose: () => void;
   onUpdate: (updates: Record<string, unknown>) => void;
-  onOpenNotes: () => void;
 }) {
+  const [notes, setNotes] = useState<{ id: string; content: string; authorName: string; createdAt: string }[]>([]);
+  const [newNote, setNewNote] = useState("");
+  const [postingNote, setPostingNote] = useState(false);
+
+  // Fetch notes for this task
+  useEffect(() => {
+    fetch(`/api/notes?entityType=task&entityId=${task.id}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.data) setNotes(d.data); })
+      .catch(() => {});
+  }, [task.id]);
+
+  const handlePostNote = async () => {
+    if (!newNote.trim()) return;
+    setPostingNote(true);
+    const res = await fetch("/api/notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entityType: "task", entityId: task.id, content: newNote.trim() }),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      setNotes((prev) => [...prev, d.data]);
+      setNewNote("");
+    }
+    setPostingNote(false);
+  };
+
   const [form, setForm] = useState({
     title: task.title,
     description: task.description || "",
@@ -598,14 +613,9 @@ function TaskDetailDrawer({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1">
-            <button onClick={onOpenNotes} className="rounded p-1.5 hover:bg-stone-100" title="Notes">
-              <MessageSquare className="h-4 w-4 text-stone-500" />
-            </button>
-            <button onClick={onClose} className="rounded p-1.5 hover:bg-stone-100">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
+          <button onClick={onClose} className="rounded p-1.5 hover:bg-stone-100">
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
         {/* Content */}
@@ -692,6 +702,47 @@ function TaskDetailDrawer({
                 value={form.dueDate}
                 onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
               />
+            </div>
+          </div>
+
+          {/* Notes / Comments */}
+          <div className="space-y-3 pt-4 border-t">
+            <Label className="text-xs text-muted-foreground uppercase tracking-wider">
+              Notes & Comments ({notes.length})
+            </Label>
+
+            {notes.length > 0 && (
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {notes.map((note) => (
+                  <div key={note.id} className="rounded-md bg-stone-50 px-3 py-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium">{note.authorName}</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {new Date(note.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-stone-600 mt-0.5 whitespace-pre-wrap">{note.content}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Input
+                value={newNote}
+                onChange={(e) => setNewNote(e.target.value)}
+                placeholder="Add a comment..."
+                className="text-xs"
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handlePostNote(); } }}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!newNote.trim() || postingNote}
+                onClick={handlePostNote}
+              >
+                {postingNote ? "..." : "Post"}
+              </Button>
             </div>
           </div>
         </div>
