@@ -18,6 +18,7 @@ import { PipelineTable } from "@/components/pipeline-table";
 import { EntityDrawer } from "@/components/entity-drawer";
 import { Badge } from "@/components/ui/badge";
 import { FileUpload } from "@/components/file-upload";
+import { ChecklistPanel, ChecklistProgress } from "@/components/checklist-panel";
 import { Mic2, Copy, Check, ExternalLink, Plus, X, Calendar, Clock } from "lucide-react";
 
 type Speaker = {
@@ -395,11 +396,25 @@ export function SpeakersClient({
             </div>
           ),
         },
+        // Checklist tab (only for confirmed speakers)
+        ...(selectedSpeaker?.stage === "confirmed"
+          ? [
+              {
+                label: "Checklist",
+                content: (
+                  <ChecklistPanel entityType="speaker" entityId={selectedSpeaker.id} />
+                ),
+              },
+            ]
+          : []),
       ]
     : [];
 
   return (
     <div>
+      {/* Checklist progress bars for confirmed speakers */}
+      <ChecklistProgress entityType="speaker" />
+
       <div className="mb-6 space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between">
         <div>
           <h1 className="font-heading text-2xl font-bold tracking-tight">Speakers</h1>
