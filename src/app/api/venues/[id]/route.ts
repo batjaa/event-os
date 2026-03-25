@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { venues } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { requirePermission, isRbacError } from "@/lib/rbac";
+import { generateChecklistItems, archiveChecklistItems } from "@/lib/checklist";
 
 export async function PATCH(
   req: NextRequest,
@@ -11,6 +12,17 @@ export async function PATCH(
   const { id } = await params;
   const ctx = await requirePermission(req, "venue", "update");
   if (isRbacError(ctx)) return ctx;
+
+  const venue = await db.query.venues.findFirst({
+    where: and(
+      eq(venues.id, id),
+      eq(venues.organizationId, ctx.orgId)
+    ),
+  });
+
+  if (!venue) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   const body = await req.json();
 
@@ -37,6 +49,15 @@ export async function PATCH(
 
   if (!updated) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  // Checklist trigger: stage transitions
+  if (updates.stage && updates.stage !== venue.stage) {
+    if (updates.stage === "confirmed" && venue.stage !== "confirmed") {
+      await generateChecklistItems("venue", id, ctx.editionId, ctx.orgId);
+    } else if (venue.stage === "confirmed" && updates.stage !== "confirmed") {
+      await archiveChecklistItems("venue", id);
+    }
   }
 
   return NextResponse.json({ data: updated });

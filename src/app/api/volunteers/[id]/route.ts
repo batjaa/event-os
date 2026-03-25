@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { volunteerApplications } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { requirePermission, isRbacError } from "@/lib/rbac";
+import { generateChecklistItems, archiveChecklistItems } from "@/lib/checklist";
 
 export async function PATCH(
   req: NextRequest,
@@ -11,6 +12,17 @@ export async function PATCH(
   const { id } = await params;
   const ctx = await requirePermission(req, "volunteer", "update");
   if (isRbacError(ctx)) return ctx;
+
+  const volunteer = await db.query.volunteerApplications.findFirst({
+    where: and(
+      eq(volunteerApplications.id, id),
+      eq(volunteerApplications.organizationId, ctx.orgId)
+    ),
+  });
+
+  if (!volunteer) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   const body = await req.json();
 
@@ -37,6 +49,15 @@ export async function PATCH(
 
   if (!updated) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  // Checklist trigger: stage transitions
+  if (updates.stage && updates.stage !== volunteer.stage) {
+    if (updates.stage === "confirmed" && volunteer.stage !== "confirmed") {
+      await generateChecklistItems("volunteer", id, ctx.editionId, ctx.orgId);
+    } else if (volunteer.stage === "confirmed" && updates.stage !== "confirmed") {
+      await archiveChecklistItems("volunteer", id);
+    }
   }
 
   return NextResponse.json({ data: updated });

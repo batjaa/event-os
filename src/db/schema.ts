@@ -667,6 +667,70 @@ export const entityNotes = pgTable(
   ]
 );
 
+// ─── Checklist Templates ─────────────────────────────────
+
+export const checklistTemplates = pgTable(
+  "checklist_templates",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => eventEditions.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    entityType: varchar("entity_type", { length: 50 }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    description: text("description"),
+    fieldKey: varchar("field_key", { length: 100 }), // maps to entity field (null for non-field items)
+    itemType: varchar("item_type", { length: 50 }).notNull(), // file_upload, text_input, link, confirmation, meeting
+    required: boolean("required").default(true).notNull(),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    dueOffsetDays: integer("due_offset_days"),
+    reminderTemplate: text("reminder_template"),
+    version: integer("version").default(1).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("checklist_tpl_edition_idx").on(table.editionId, table.entityType),
+  ]
+);
+
+// ─── Checklist Items ─────────────────────────────────────
+
+export const checklistItems = pgTable(
+  "checklist_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    templateId: uuid("template_id")
+      .notNull()
+      .references(() => checklistTemplates.id, { onDelete: "cascade" }),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => eventEditions.id, { onDelete: "cascade" }),
+    entityType: varchar("entity_type", { length: 50 }).notNull(),
+    entityId: uuid("entity_id").notNull(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    status: varchar("status", { length: 50 }).default("pending").notNull(),
+    value: text("value"),
+    submittedAt: timestamp("submitted_at"),
+    approvedBy: uuid("approved_by").references(() => users.id, { onDelete: "set null" }),
+    approvedAt: timestamp("approved_at"),
+    notes: text("notes"),
+    reminderSentAt: timestamp("reminder_sent_at"),
+    version: integer("version").default(1).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("checklist_item_entity_idx").on(table.entityType, table.entityId),
+    index("checklist_item_edition_idx").on(table.editionId, table.organizationId),
+  ]
+);
+
 // ─── Audit Log ───────────────────────────────────────────
 
 export const auditLog = pgTable(

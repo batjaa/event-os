@@ -4,6 +4,7 @@ import { speakerApplications } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { checkVersion } from "@/lib/api-utils";
 import { requirePermission, isRbacError } from "@/lib/rbac";
+import { generateChecklistItems, archiveChecklistItems } from "@/lib/checklist";
 
 export async function GET(
   req: NextRequest,
@@ -110,6 +111,15 @@ export async function PATCH(
       { error: "Conflict — record was modified", currentVersion: speaker.version },
       { status: 409 }
     );
+  }
+
+  // Checklist trigger: stage transitions
+  if (updates.stage && updates.stage !== speaker.stage) {
+    if (updates.stage === "confirmed" && speaker.stage !== "confirmed") {
+      await generateChecklistItems("speaker", id, ctx.editionId, ctx.orgId);
+    } else if (speaker.stage === "confirmed" && updates.stage !== "confirmed") {
+      await archiveChecklistItems("speaker", id);
+    }
   }
 
   return NextResponse.json({ data: updated });

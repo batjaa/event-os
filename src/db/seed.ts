@@ -263,6 +263,54 @@ async function seed() {
   }
   console.log(`  Teams: ${rbacTeams.length} org-wide RBAC teams with entity type mappings`);
 
+  // Checklist templates
+  const checklistData: { entityType: string; name: string; fieldKey: string | null; itemType: string; required: boolean; sort: number; dueDays: number | null }[] = [
+    // Speaker
+    { entityType: "speaker", name: "Upload headshot photo", fieldKey: "headshotUrl", itemType: "file_upload", required: true, sort: 0, dueDays: -21 },
+    { entityType: "speaker", name: "Submit speaker bio", fieldKey: "bio", itemType: "text_input", required: true, sort: 1, dueDays: -21 },
+    { entityType: "speaker", name: "Confirm talk title & abstract", fieldKey: "talkTitle", itemType: "text_input", required: true, sort: 2, dueDays: -14 },
+    { entityType: "speaker", name: "Upload/share slides", fieldKey: "slideUrl", itemType: "link", required: true, sort: 3, dueDays: -7 },
+    { entityType: "speaker", name: "Confirm travel arrangements", fieldKey: null, itemType: "confirmation", required: false, sort: 4, dueDays: -14 },
+    { entityType: "speaker", name: "Attend kickoff meeting", fieldKey: null, itemType: "meeting", required: false, sort: 5, dueDays: -14 },
+    // Sponsor
+    { entityType: "sponsor", name: "Upload company logo (high-res)", fieldKey: "logoUrl", itemType: "file_upload", required: true, sort: 0, dueDays: -21 },
+    { entityType: "sponsor", name: "Submit company description", fieldKey: "message", itemType: "text_input", required: true, sort: 1, dueDays: -21 },
+    { entityType: "sponsor", name: "Confirm booth preferences", fieldKey: null, itemType: "confirmation", required: true, sort: 2, dueDays: -14 },
+    { entityType: "sponsor", name: "Submit branding guidelines", fieldKey: null, itemType: "file_upload", required: false, sort: 3, dueDays: -14 },
+    // Venue
+    { entityType: "venue", name: "Upload venue photos", fieldKey: "mainImageUrl", itemType: "file_upload", required: true, sort: 0, dueDays: -21 },
+    { entityType: "venue", name: "Submit floor plan", fieldKey: "floorPlanUrl", itemType: "file_upload", required: true, sort: 1, dueDays: -14 },
+    { entityType: "venue", name: "Confirm AV equipment list", fieldKey: null, itemType: "text_input", required: true, sort: 2, dueDays: -14 },
+    { entityType: "venue", name: "Confirm catering arrangements", fieldKey: null, itemType: "confirmation", required: true, sort: 3, dueDays: -7 },
+    // Booth
+    { entityType: "booth", name: "Upload company logo", fieldKey: "companyLogoUrl", itemType: "file_upload", required: true, sort: 0, dueDays: -21 },
+    { entityType: "booth", name: "Confirm booth size/location", fieldKey: null, itemType: "confirmation", required: true, sort: 1, dueDays: -14 },
+    { entityType: "booth", name: "Submit electricity/internet requirements", fieldKey: null, itemType: "text_input", required: false, sort: 2, dueDays: -14 },
+    // Volunteer
+    { entityType: "volunteer", name: "Upload headshot photo", fieldKey: "headshotUrl", itemType: "file_upload", required: false, sort: 0, dueDays: -14 },
+    { entityType: "volunteer", name: "Confirm availability dates", fieldKey: null, itemType: "confirmation", required: true, sort: 1, dueDays: -14 },
+    { entityType: "volunteer", name: "Select preferred role/area", fieldKey: null, itemType: "text_input", required: true, sort: 2, dueDays: -14 },
+    // Media
+    { entityType: "media", name: "Upload media outlet logo", fieldKey: "logoUrl", itemType: "file_upload", required: true, sort: 0, dueDays: -21 },
+    { entityType: "media", name: "Submit coverage plan", fieldKey: null, itemType: "text_input", required: true, sort: 1, dueDays: -14 },
+    { entityType: "media", name: "Confirm press credentials", fieldKey: null, itemType: "confirmation", required: true, sort: 2, dueDays: -7 },
+  ];
+
+  for (const c of checklistData) {
+    await db.insert(schema.checklistTemplates).values({
+      editionId: edition.id,
+      organizationId: org.id,
+      entityType: c.entityType,
+      name: c.name,
+      fieldKey: c.fieldKey,
+      itemType: c.itemType,
+      required: c.required,
+      sortOrder: c.sort,
+      dueOffsetDays: c.dueDays,
+    });
+  }
+  console.log(`  Checklist templates: ${checklistData.length} across 6 entity types`);
+
   console.log("\nSeed complete!");
   console.log(`  Org: ${org.id}`);
   console.log(`  Edition: ${edition.id}`);
