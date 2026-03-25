@@ -22,7 +22,6 @@ export default function DashboardLayout({
     fetch("/api/portal/me")
       .then((r) => {
         if (r.ok) {
-          // User is a stakeholder — redirect to portal
           router.replace("/portal");
         } else {
           setChecked(true);
@@ -31,16 +30,9 @@ export default function DashboardLayout({
       .catch(() => setChecked(true));
   }, [router]);
 
-  if (!checked) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground text-sm">Loading...</div>
-      </div>
-    );
-  }
-
-  // Cmd+K listener lives here — always mounted, regardless of panel state
+  // Cmd+K listener — always mounted, regardless of panel state
   useEffect(() => {
+    if (!checked) return; // don't bind until ready
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
@@ -49,7 +41,15 @@ export default function DashboardLayout({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [toggleChat]);
+  }, [toggleChat, checked]);
+
+  if (!checked) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-pulse text-muted-foreground text-sm">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <ConfirmProvider>
