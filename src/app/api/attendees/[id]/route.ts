@@ -12,13 +12,25 @@ export async function PATCH(
   const ctx = await requirePermission(req, "attendee", "update");
   if (isRbacError(ctx)) return ctx;
 
-  const body = await req.json();
+  // Verify attendee belongs to user's org
+  const attendee = await db.query.attendees.findFirst({
+    where: and(eq(attendees.id, id), eq(attendees.organizationId, ctx.orgId)),
+  });
 
-  // Build updates from body — only include fields that are present
+  if (!attendee) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const body = await req.json();
+  const allowedFields = [
+    "name", "email", "ticketType", "checkedIn", "checkedInAt",
+    "checkedInBy", "source", "stage", "assignedTo",
+  ] as const;
+
   const updates: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(body)) {
-    if (value !== undefined) {
-      updates[key] = value;
+  for (const field of allowedFields) {
+    if (body[field] !== undefined) {
+      updates[field] = body[field];
     }
   }
 
@@ -32,7 +44,7 @@ export async function PATCH(
       ...updates,
       version: sql`${attendees.version} + 1`,
     })
-    .where(eq(attendees.id, id))
+    .where(and(eq(attendees.id, id), eq(attendees.organizationId, ctx.orgId)))
     .returning();
 
   if (!updated) {

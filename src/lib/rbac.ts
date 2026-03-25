@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { validateServiceToken } from "@/lib/service-token";
 import { db } from "@/db";
-import { users, teamMembers, teamEntityTypes, teams } from "@/db/schema";
+import { users, organizations, teamMembers, teamEntityTypes, teams, eventEditions } from "@/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { getActiveIds } from "@/lib/queries";
 
@@ -63,11 +63,22 @@ export async function requirePermission(
           { status: 400 }
         );
       }
-      const ids = await getActiveIds();
+      // Verify org exists
+      const org = await db.query.organizations.findFirst({
+        where: eq(organizations.id, orgId),
+      });
+      if (!org) {
+        return NextResponse.json({ error: "Organization not found" }, { status: 404 });
+      }
+      // Get latest edition for this org
+      const edition = await db.query.eventEditions.findFirst({
+        where: eq(eventEditions.organizationId, orgId),
+        orderBy: (e, { desc }) => [desc(e.createdAt)],
+      });
       return {
         user: { id: "service", role: "admin", name: "Service", email: "service@system" },
         orgId,
-        editionId: ids?.editionId || "",
+        editionId: edition?.id || "",
         source: "api",
       };
     }

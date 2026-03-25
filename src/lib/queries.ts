@@ -3,7 +3,18 @@ import { eq, and, desc, asc, count, sql } from "drizzle-orm";
 import * as schema from "@/db/schema";
 
 export async function getActiveIds() {
-  // Try cookie first (user's selected edition)
+  // 1. Get the user's org from session (authoritative source)
+  let userOrgId: string | undefined;
+  try {
+    const { auth } = await import("@/lib/auth");
+    const session = await auth();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    userOrgId = (session?.user as any)?.organizationId;
+  } catch {
+    // Session may not be available in all contexts
+  }
+
+  // 2. Try cookie — but only if edition belongs to user's org
   try {
     const { getEditionFromCookie } = await import("@/lib/edition-cookie");
     const cookieEditionId = await getEditionFromCookie();
@@ -11,32 +22,36 @@ export async function getActiveIds() {
       const edition = await db.query.eventEditions.findFirst({
         where: eq(schema.eventEditions.id, cookieEditionId),
       });
-      if (edition) {
+      if (edition && (!userOrgId || edition.organizationId === userOrgId)) {
         return { orgId: edition.organizationId, editionId: edition.id };
       }
+      // Cookie points to a different org — ignore it
     }
   } catch {
     // Cookie reading may fail in API routes — that's fine, fall through
   }
 
-  // Try env vars
-  const envOrg = process.env.DEFAULT_ORG_ID || "";
-  const envEdition = process.env.DEFAULT_EDITION_ID || "";
-  if (envOrg && envEdition) {
-    return { orgId: envOrg, editionId: envEdition };
+  // 3. Try env vars (for service token / non-session contexts only)
+  if (!userOrgId) {
+    const envOrg = process.env.DEFAULT_ORG_ID || "";
+    const envEdition = process.env.DEFAULT_EDITION_ID || "";
+    if (envOrg && envEdition) {
+      return { orgId: envOrg, editionId: envEdition };
+    }
   }
 
-  // Fall back to most recent edition in DB
-  const org = await db.query.organizations.findFirst();
-  if (!org) return null;
+  // 4. Fall back to user's org's most recent edition
+  if (userOrgId) {
+    const edition = await db.query.eventEditions.findFirst({
+      where: eq(schema.eventEditions.organizationId, userOrgId),
+      orderBy: desc(schema.eventEditions.createdAt),
+    });
+    if (edition) {
+      return { orgId: userOrgId, editionId: edition.id };
+    }
+  }
 
-  const edition = await db.query.eventEditions.findFirst({
-    where: eq(schema.eventEditions.organizationId, org.id),
-    orderBy: desc(schema.eventEditions.createdAt),
-  });
-  if (!edition) return null;
-
-  return { orgId: org.id, editionId: edition.id };
+  return null;
 }
 
 export async function getEdition() {

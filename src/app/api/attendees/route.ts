@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { attendees } from "@/db/schema";
 import { eq, and, asc } from "drizzle-orm";
+
 import { createHash, randomBytes } from "crypto";
 import { requirePermission, isRbacError } from "@/lib/rbac";
 
@@ -18,15 +19,14 @@ export async function GET(req: NextRequest) {
   const ctx = await requirePermission(req, "attendee", "read");
   if (isRbacError(ctx)) return ctx;
 
-  const url = new URL(req.url);
-  const editionId = url.searchParams.get("editionId") || ctx.editionId;
+  const editionId = ctx.editionId;
 
   if (!editionId) {
     return NextResponse.json({ error: "editionId required" }, { status: 400 });
   }
 
   const result = await db.query.attendees.findMany({
-    where: eq(attendees.editionId, editionId),
+    where: and(eq(attendees.editionId, editionId), eq(attendees.organizationId, ctx.orgId)),
     orderBy: [asc(attendees.name)],
   });
 

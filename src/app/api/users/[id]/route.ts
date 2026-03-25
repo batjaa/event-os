@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { users } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+import { requirePermission, isRbacError } from "@/lib/rbac";
 
 // PATCH — update user role or name
 export async function PATCH(
@@ -9,6 +10,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const ctx = await requirePermission(req, "user", "update");
+  if (isRbacError(ctx)) return ctx;
+
   const body = await req.json();
 
   const allowedFields = ["name", "role", "image"] as const;
@@ -32,7 +36,7 @@ export async function PATCH(
   const [updated] = await db
     .update(users)
     .set(updates)
-    .where(eq(users.id, id))
+    .where(and(eq(users.id, id), eq(users.organizationId, ctx.orgId)))
     .returning({
       id: users.id,
       name: users.name,
@@ -49,12 +53,21 @@ export async function PATCH(
 
 // DELETE — remove user from organization
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const ctx = await requirePermission(req, "user", "delete");
+  if (isRbacError(ctx)) return ctx;
 
-  await db.delete(users).where(eq(users.id, id));
+  const [deleted] = await db
+    .delete(users)
+    .where(and(eq(users.id, id), eq(users.organizationId, ctx.orgId)))
+    .returning();
+
+  if (!deleted) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
 
   return NextResponse.json({ success: true });
 }

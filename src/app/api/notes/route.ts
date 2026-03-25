@@ -20,7 +20,8 @@ export async function GET(req: NextRequest) {
   const notes = await db.query.entityNotes.findMany({
     where: and(
       eq(entityNotes.entityType, entityType),
-      eq(entityNotes.entityId, entityId)
+      eq(entityNotes.entityId, entityId),
+      eq(entityNotes.organizationId, ctx.orgId)
     ),
     orderBy: asc(entityNotes.createdAt),
   });

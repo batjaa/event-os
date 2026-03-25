@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { entityNotes } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { requirePermission, isRbacError } from "@/lib/rbac";
 
 // PATCH — edit note content (own notes only)
@@ -14,7 +14,7 @@ export async function PATCH(
   if (isRbacError(ctx)) return ctx;
 
   const note = await db.query.entityNotes.findFirst({
-    where: eq(entityNotes.id, id),
+    where: and(eq(entityNotes.id, id), eq(entityNotes.organizationId, ctx.orgId)),
   });
 
   if (!note) {
@@ -49,7 +49,7 @@ export async function DELETE(
   if (isRbacError(ctx)) return ctx;
 
   const note = await db.query.entityNotes.findFirst({
-    where: eq(entityNotes.id, id),
+    where: and(eq(entityNotes.id, id), eq(entityNotes.organizationId, ctx.orgId)),
   });
 
   if (!note) {
