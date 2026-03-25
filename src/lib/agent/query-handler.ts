@@ -14,6 +14,34 @@ import { AgentContext } from "./dispatcher";
 //  → SELECT COUNT(*) FROM speaker_applications WHERE stage='confirmed' AND org_id=?
 //  → "There are 4 confirmed speakers."
 
+// Field aliases — maps LLM terms to actual DB column names
+const FIELD_ALIASES: Record<string, string> = {
+  company: "companyName",
+  "company_name": "companyName",
+  "contact_email": "contactEmail",
+  "contact_name": "contactName",
+  phone: "phone",
+  "phone#": "phone",
+  track: "trackPreference",
+  "talk_track": "trackPreference",
+  "talk_type": "talkType",
+  "talk_title": "talkTitle",
+  assignee: "assignedTo",
+  "assigned_to": "assignedTo",
+  priority: "priority",
+  status: "status",
+  stage: "stage",
+  platform: "platform",
+  type: "type",
+  email: "email",
+  name: "name",
+  title: "title",
+};
+
+function resolveField(key: string): string {
+  return FIELD_ALIASES[key.toLowerCase()] || key;
+}
+
 // Entity type → Drizzle table mapping
 const TABLE_MAP: Record<string, { table: any; nameField: string; label: string; pluralLabel: string }> = {
   speaker: { table: schema.speakerApplications, nameField: "name", label: "speaker", pluralLabel: "speakers" },
@@ -83,10 +111,17 @@ async function handleCount(
     conditions.push(eq(table.organizationId, ctx.orgId));
   }
 
-  // Apply filters from intent
+  // Apply filters from intent (with alias resolution + ILIKE for string values)
   for (const [key, value] of Object.entries(filters)) {
-    if (key in table && value) {
-      conditions.push(eq((table as any)[key], value));
+    const col = resolveField(key);
+    if (col in table && value) {
+      // Use ILIKE for text-like filters (company names, etc.), eq for enums (stage, status)
+      const enumFields = ["stage", "status", "priority", "talkType", "type", "platform", "source"];
+      if (enumFields.includes(col)) {
+        conditions.push(eq((table as any)[col], value));
+      } else {
+        conditions.push(ilike((table as any)[col], `%${value}%`));
+      }
     }
   }
 

@@ -1,5 +1,6 @@
 import { AgentIntent, DispatchResult } from "./types";
 import { handleQuery } from "./query-handler";
+import { handleManage } from "./manage-handler";
 
 // ─── Agent Dispatcher ────────────────────────────────
 //
@@ -31,11 +32,7 @@ export async function dispatch(
         return handleQuery(intent, ctx);
 
       case "manage":
-        // Phase 1b stub — acknowledge but don't execute
-        return {
-          message: `I understand you want to ${intent.action} a ${intent.entityType}. This feature is coming soon — for now, use the web UI to make changes.`,
-          success: true,
-        };
+        return handleManage(intent, ctx);
 
       case "extract":
         // Pass through — the chat panel handles extraction via the existing flow
