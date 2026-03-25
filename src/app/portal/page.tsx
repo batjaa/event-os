@@ -1,0 +1,270 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  CheckCircle2,
+  Circle,
+  AlertCircle,
+  Clock,
+  Upload,
+  MapPin,
+  Calendar,
+  Mic2,
+  LogOut,
+} from "lucide-react";
+
+type ChecklistItem = {
+  id: string;
+  name: string;
+  description: string | null;
+  itemType: string;
+  required: boolean;
+  status: string;
+  value: string | null;
+  notes: string | null;
+  fieldKey: string | null;
+};
+
+type PortalData = {
+  user: { name: string; email: string; role: string; linkedEntityType: string; linkedEntityId: string };
+  entity: Record<string, unknown>;
+  edition: { name: string; startDate: string | null; endDate: string | null; venue: string | null };
+  checklistItems: ChecklistItem[];
+};
+
+const statusConfig: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
+  pending: { icon: Circle, color: "text-stone-400", bg: "bg-stone-50" },
+  submitted: { icon: Clock, color: "text-sky-600", bg: "bg-sky-50" },
+  approved: { icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-50" },
+  needs_revision: { icon: AlertCircle, color: "text-orange-600", bg: "bg-orange-50" },
+};
+
+export default function PortalPage() {
+  const [data, setData] = useState<PortalData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch("/api/portal/me")
+      .then((r) => {
+        if (!r.ok) throw new Error("Not authorized");
+        return r.json();
+      })
+      .then((d) => setData(d.data))
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSubmitItem = async (itemId: string, value: string) => {
+    await fetch(`/api/checklist-items/${itemId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "submitted", value }),
+    });
+    // Refresh
+    const r = await fetch("/api/portal/me");
+    const d = await r.json();
+    setData(d.data);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+        <div className="animate-pulse text-stone-400">Loading your portal...</div>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <p className="text-stone-600">Unable to load your portal.</p>
+          <p className="text-sm text-stone-400">Please sign in with your portal credentials.</p>
+          <Button onClick={() => window.location.href = "/login"}>Sign In</Button>
+        </div>
+      </div>
+    );
+  }
+
+  const { user, entity, edition, checklistItems } = data;
+  const activeItems = checklistItems.filter((i) => i.status !== "archived");
+  const completed = activeItems.filter((i) => i.status === "submitted" || i.status === "approved").length;
+  const total = activeItems.length;
+  const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  const entityName = (entity as Record<string, string>).name || (entity as Record<string, string>).companyName || (entity as Record<string, string>).contactName || "Your Profile";
+
+  return (
+    <div className="min-h-screen bg-stone-50">
+      {/* Header */}
+      <header className="border-b bg-white">
+        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div>
+            <h1 className="font-heading text-lg font-bold">{edition.name}</h1>
+            <p className="text-xs text-stone-500 capitalize">{user.linkedEntityType} Portal</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-stone-600">{user.name}</span>
+            <Button variant="outline" size="sm" onClick={() => {
+              fetch("/api/auth/signout", { method: "POST" }).then(() => window.location.href = "/login");
+            }}>
+              <LogOut className="h-3 w-3 mr-1" /> Sign out
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-2xl mx-auto px-4 py-8 space-y-8">
+        {/* Welcome + Progress */}
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">
+            Welcome, {user.name || entityName}!
+          </h2>
+          <div className="mt-4 space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium">Your Checklist ({completed}/{total} complete)</span>
+              <span className="text-stone-500">{pct}%</span>
+            </div>
+            <div className="h-3 rounded-full bg-stone-200 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${pct === 100 ? "bg-emerald-500" : "bg-yellow-500"}`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Checklist Items */}
+        <div className="space-y-3">
+          {activeItems.map((item) => {
+            const cfg = statusConfig[item.status] || statusConfig.pending;
+            const StatusIcon = cfg.icon;
+
+            return (
+              <div key={item.id} className={`rounded-lg border p-4 ${cfg.bg}`}>
+                <div className="flex items-start gap-3">
+                  <StatusIcon className={`h-5 w-5 mt-0.5 shrink-0 ${cfg.color}`} />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">{item.name}</span>
+                      {item.required && (
+                        <Badge variant="outline" className="text-[9px]">Required</Badge>
+                      )}
+                      {item.status === "approved" && (
+                        <Badge className="bg-emerald-100 text-emerald-700 text-[9px]">Approved</Badge>
+                      )}
+                    </div>
+                    {item.description && (
+                      <p className="text-xs text-stone-500 mt-1">{item.description}</p>
+                    )}
+
+                    {/* Show submitted value */}
+                    {item.value && item.status !== "needs_revision" && (
+                      <p className="text-xs text-sky-600 mt-2 break-all">{item.value}</p>
+                    )}
+
+                    {/* Revision feedback */}
+                    {item.notes && item.status === "needs_revision" && (
+                      <div className="mt-2 rounded bg-orange-100 px-3 py-2">
+                        <p className="text-xs font-medium text-orange-800">Organizer feedback:</p>
+                        <p className="text-xs text-orange-700 mt-0.5">{item.notes}</p>
+                      </div>
+                    )}
+
+                    {/* Action buttons for pending / needs_revision */}
+                    {(item.status === "pending" || item.status === "needs_revision") && (
+                      <div className="mt-3">
+                        {item.itemType === "file_upload" && (
+                          <div className="space-y-2">
+                            <Input
+                              placeholder="Paste file URL or upload link..."
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && (e.target as HTMLInputElement).value) {
+                                  handleSubmitItem(item.id, (e.target as HTMLInputElement).value);
+                                }
+                              }}
+                            />
+                            <p className="text-[10px] text-stone-400">Press Enter to submit</p>
+                          </div>
+                        )}
+                        {item.itemType === "text_input" && (
+                          <div className="space-y-2">
+                            <Textarea
+                              placeholder="Enter your response..."
+                              rows={3}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && e.metaKey && (e.target as HTMLTextAreaElement).value) {
+                                  handleSubmitItem(item.id, (e.target as HTMLTextAreaElement).value);
+                                }
+                              }}
+                            />
+                            <p className="text-[10px] text-stone-400">Cmd+Enter to submit</p>
+                          </div>
+                        )}
+                        {item.itemType === "link" && (
+                          <div className="space-y-2">
+                            <Input
+                              placeholder="Paste URL (Google Slides, Dropbox, etc.)..."
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && (e.target as HTMLInputElement).value) {
+                                  handleSubmitItem(item.id, (e.target as HTMLInputElement).value);
+                                }
+                              }}
+                            />
+                            <p className="text-[10px] text-stone-400">Press Enter to submit</p>
+                          </div>
+                        )}
+                        {item.itemType === "confirmation" && (
+                          <Button
+                            size="sm"
+                            onClick={() => handleSubmitItem(item.id, "true")}
+                          >
+                            Confirm
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Event Info */}
+        <div className="rounded-lg border bg-white p-6 space-y-3">
+          <h3 className="font-medium text-sm uppercase tracking-wider text-stone-500">Event Info</h3>
+          {edition.venue && (
+            <div className="flex items-center gap-2 text-sm">
+              <MapPin className="h-4 w-4 text-stone-400" />
+              <span>{edition.venue}</span>
+            </div>
+          )}
+          {edition.startDate && (
+            <div className="flex items-center gap-2 text-sm">
+              <Calendar className="h-4 w-4 text-stone-400" />
+              <span>
+                {new Date(edition.startDate).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+                {edition.endDate && ` — ${new Date(edition.endDate).toLocaleDateString("en-US", { month: "long", day: "numeric" })}`}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Completion message */}
+        {pct === 100 && (
+          <div className="rounded-lg border-2 border-emerald-200 bg-emerald-50 p-6 text-center">
+            <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-2" />
+            <p className="font-medium text-emerald-800">All done! Thank you.</p>
+            <p className="text-sm text-emerald-600 mt-1">The organizer will review your submissions.</p>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}

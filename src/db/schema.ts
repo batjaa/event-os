@@ -762,6 +762,9 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash"),
   organizationId: uuid("organization_id").references(() => organizations.id),
   role: varchar("role", { length: 50 }).default("organizer").notNull(),
+  // Stakeholder linking — connects a portal user to their entity record
+  linkedEntityType: varchar("linked_entity_type", { length: 50 }), // speaker, sponsor, booth, venue, etc.
+  linkedEntityId: uuid("linked_entity_id"), // the specific entity record
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

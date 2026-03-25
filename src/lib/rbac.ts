@@ -9,7 +9,14 @@ import { getActiveIds } from "@/lib/queries";
 // ─── Types ─────────────────────────────────────────────
 
 export type RbacContext = {
-  user: { id: string; role: string; name: string | null; email: string };
+  user: {
+    id: string;
+    role: string;
+    name: string | null;
+    email: string;
+    linkedEntityType?: string | null;
+    linkedEntityId?: string | null;
+  };
   orgId: string;
   editionId: string;
   source: "web" | "api";
@@ -23,6 +30,7 @@ const ROLE_HIERARCHY: Record<string, number> = {
   organizer: 60,
   coordinator: 40,
   viewer: 20,
+  stakeholder: 10,
 };
 
 // ─── Permission Check ──────────────────────────────────
@@ -83,10 +91,10 @@ export async function requirePermission(
     const ids = await getActiveIds();
     const editionId = ids?.editionId || "";
 
-    // Look up full user record for name/email
+    // Look up full user record
     const user = await db.query.users.findFirst({
       where: eq(users.id, userId),
-      columns: { id: true, name: true, email: true, role: true },
+      columns: { id: true, name: true, email: true, role: true, linkedEntityType: true, linkedEntityId: true },
     });
 
     if (!user) {
@@ -94,7 +102,10 @@ export async function requirePermission(
     }
 
     const ctx: RbacContext = {
-      user: { id: user.id, role: user.role, name: user.name, email: user.email },
+      user: {
+        id: user.id, role: user.role, name: user.name, email: user.email,
+        linkedEntityType: user.linkedEntityType, linkedEntityId: user.linkedEntityId,
+      },
       orgId,
       editionId,
       source: "web",
@@ -105,7 +116,18 @@ export async function requirePermission(
       return ctx;
     }
 
-    // Everyone can read
+    // Stakeholder: can only read/update their own linked entity + checklist items
+    if (role === "stakeholder") {
+      if (action === "read") return ctx;
+      if (action === "delete") return forbidden("You don't have permission to delete records.");
+      // Stakeholders can't create new entities
+      if (action === "create" && entityType !== "checklist") {
+        return forbidden("You don't have permission to create records.");
+      }
+      return ctx; // update allowed — route-level checks verify entity ownership
+    }
+
+    // Everyone else can read
     if (action === "read") {
       return ctx;
     }

@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "A user with this email already exists" }, { status: 409 });
   }
 
-  const validRoles = ["owner", "admin", "organizer", "coordinator", "viewer"];
+  const validRoles = ["owner", "admin", "organizer", "coordinator", "viewer", "stakeholder"];
   const userRole = validRoles.includes(role) ? role : "organizer";
 
   // Create with a temporary password — user should reset on first login
@@ -60,6 +60,8 @@ export async function POST(req: NextRequest) {
       passwordHash: tempPassword,
       organizationId: ids.orgId,
       role: userRole,
+      linkedEntityType: body.linkedEntityType || null,
+      linkedEntityId: body.linkedEntityId || null,
     })
     .returning({
       id: users.id,
