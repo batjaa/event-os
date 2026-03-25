@@ -34,11 +34,6 @@ export function middleware(request: NextRequest) {
     request.cookies.get("__Secure-next-auth.session-token")?.value;
 
   if (!sessionToken) {
-    // In development, skip auth check to allow easy testing
-    if (process.env.NODE_ENV === "development") {
-      return NextResponse.next();
-    }
-
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
