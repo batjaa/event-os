@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { AssignedToSelect } from "@/components/assigned-to-select";
 import { useConfirm } from "@/components/confirm-dialog";
-import { Plus, ChevronLeft, ChevronRight, X, Trash2, Calendar, Send } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, X, Trash2, Calendar, Check } from "lucide-react";
 
 type Campaign = {
   id: string;
@@ -19,21 +19,13 @@ type Campaign = {
   scheduledDate: string | null;
   content: string | null;
   assignedTo: string | null;
-  speakerId: string | null;
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  draft: "bg-stone-200",
+  draft: "bg-stone-300",
   scheduled: "bg-yellow-400",
   published: "bg-emerald-400",
   cancelled: "bg-red-300",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  draft: "Draft",
-  scheduled: "Scheduled",
-  published: "Published",
-  cancelled: "Cancelled",
 };
 
 const PLATFORM_COLORS: Record<string, string> = {
@@ -55,12 +47,17 @@ export function MarketingClient({ initialCampaigns }: { initialCampaigns: Campai
   });
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [createDate, setCreateDate] = useState<string>("");
+  const [createDate, setCreateDate] = useState("");
 
   const refreshCampaigns = async () => {
     const res = await fetch("/api/campaigns");
     const d = await res.json();
-    if (d.data) setCampaigns(d.data);
+    if (d.data) {
+      setCampaigns(d.data.map((c: Record<string, unknown>) => ({
+        ...c,
+        scheduledDate: c.scheduledDate ? String(c.scheduledDate) : null,
+      })));
+    }
   };
 
   // Calendar grid
@@ -70,10 +67,8 @@ export function MarketingClient({ initialCampaigns }: { initialCampaigns: Campai
     const lastDay = new Date(year, month + 1, 0);
     const startPad = firstDay.getDay();
     const totalDays = lastDay.getDate();
-
     const days: { date: string; day: number; isCurrentMonth: boolean }[] = [];
 
-    // Previous month padding
     const prevLastDay = new Date(year, month, 0).getDate();
     for (let i = startPad - 1; i >= 0; i--) {
       const d = prevLastDay - i;
@@ -81,27 +76,24 @@ export function MarketingClient({ initialCampaigns }: { initialCampaigns: Campai
       const y = month === 0 ? year - 1 : year;
       days.push({ date: `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`, day: d, isCurrentMonth: false });
     }
-
-    // Current month
     for (let d = 1; d <= totalDays; d++) {
       days.push({ date: `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`, day: d, isCurrentMonth: true });
     }
-
-    // Next month padding
     const remaining = 42 - days.length;
     for (let d = 1; d <= remaining; d++) {
       const m = month === 11 ? 0 : month + 1;
       const y = month === 11 ? year + 1 : year;
       days.push({ date: `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`, day: d, isCurrentMonth: false });
     }
-
     return days;
   }, [currentMonth]);
 
-  const getCampaignsForDate = (date: string) => {
+  const getCampaignsForDate = (dateStr: string) => {
     return campaigns.filter((c) => {
       if (!c.scheduledDate) return false;
-      return c.scheduledDate.startsWith(date);
+      // Compare just the date part (YYYY-MM-DD)
+      const d = c.scheduledDate.slice(0, 10);
+      return d === dateStr;
     });
   };
 
@@ -109,8 +101,8 @@ export function MarketingClient({ initialCampaigns }: { initialCampaigns: Campai
 
   const counts = {
     total: campaigns.length,
-    draft: campaigns.filter((c) => c.status === "draft").length,
-    scheduled: campaigns.filter((c) => c.status === "scheduled").length,
+    unscheduled: campaigns.filter((c) => !c.scheduledDate).length,
+    scheduled: campaigns.filter((c) => c.scheduledDate && c.status !== "published").length,
     published: campaigns.filter((c) => c.status === "published").length,
   };
 
@@ -121,82 +113,52 @@ export function MarketingClient({ initialCampaigns }: { initialCampaigns: Campai
         <div>
           <h1 className="font-heading text-2xl font-bold tracking-tight">Marketing</h1>
           <p className="text-sm text-muted-foreground">
-            {counts.total} campaigns — {counts.draft} drafts, {counts.scheduled} scheduled, {counts.published} published
+            {counts.total} items — {counts.unscheduled} unscheduled, {counts.scheduled} scheduled, {counts.published} done
           </p>
         </div>
         <Button size="sm" onClick={() => { setCreateDate(""); setShowCreate(true); }}>
-          <Plus className="mr-2 h-3 w-3" /> New Campaign
+          <Plus className="mr-2 h-3 w-3" /> New Item
         </Button>
       </div>
 
       {/* Month navigation */}
       <div className="flex items-center justify-between mb-4">
-        <button
-          onClick={() => setCurrentMonth((prev) => {
-            const m = prev.month === 0 ? 11 : prev.month - 1;
-            const y = prev.month === 0 ? prev.year - 1 : prev.year;
-            return { year: y, month: m };
-          })}
-          className="rounded p-1.5 hover:bg-stone-100 transition-colors"
-        >
+        <button onClick={() => setCurrentMonth((p) => ({ year: p.month === 0 ? p.year - 1 : p.year, month: p.month === 0 ? 11 : p.month - 1 }))} className="rounded p-1.5 hover:bg-stone-100 transition-colors">
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <h2 className="text-lg font-semibold">
-          {MONTHS[currentMonth.month]} {currentMonth.year}
-        </h2>
-        <button
-          onClick={() => setCurrentMonth((prev) => {
-            const m = prev.month === 11 ? 0 : prev.month + 1;
-            const y = prev.month === 11 ? prev.year + 1 : prev.year;
-            return { year: y, month: m };
-          })}
-          className="rounded p-1.5 hover:bg-stone-100 transition-colors"
-        >
+        <h2 className="text-lg font-semibold">{MONTHS[currentMonth.month]} {currentMonth.year}</h2>
+        <button onClick={() => setCurrentMonth((p) => ({ year: p.month === 11 ? p.year + 1 : p.year, month: p.month === 11 ? 0 : p.month + 1 }))} className="rounded p-1.5 hover:bg-stone-100 transition-colors">
           <ChevronRight className="h-5 w-5" />
         </button>
       </div>
 
       {/* Calendar grid */}
       <div className="border rounded-lg overflow-hidden">
-        {/* Day headers */}
         <div className="grid grid-cols-7 border-b bg-stone-50">
           {DAYS.map((day) => (
-            <div key={day} className="px-2 py-2 text-center text-xs font-medium text-stone-500">
-              {day}
-            </div>
+            <div key={day} className="px-2 py-2 text-center text-xs font-medium text-stone-500">{day}</div>
           ))}
         </div>
-
-        {/* Calendar cells */}
         <div className="grid grid-cols-7">
           {calendarDays.map((day, i) => {
             const dayCampaigns = getCampaignsForDate(day.date);
             const isToday = day.date === today;
-
             return (
               <div
                 key={i}
-                onClick={() => {
-                  if (day.isCurrentMonth) {
-                    setCreateDate(day.date);
-                    setShowCreate(true);
-                  }
-                }}
+                onClick={() => { setCreateDate(day.date); setShowCreate(true); }}
                 className={`min-h-[100px] border-b border-r p-1.5 cursor-pointer transition-colors hover:bg-yellow-50/30 ${
                   !day.isCurrentMonth ? "bg-stone-50/50" : ""
                 } ${isToday ? "bg-yellow-50/50" : ""}`}
               >
-                {/* Day number */}
-                <div className="flex items-center justify-between mb-1">
+                <div className="mb-1">
                   <span className={`text-xs tabular-nums ${
-                    isToday ? "bg-yellow-500 text-white rounded-full w-5 h-5 flex items-center justify-center font-medium" :
+                    isToday ? "bg-yellow-500 text-white rounded-full w-5 h-5 inline-flex items-center justify-center font-medium" :
                     !day.isCurrentMonth ? "text-stone-300" : "text-stone-600"
                   }`}>
                     {day.day}
                   </span>
                 </div>
-
-                {/* Campaign pills */}
                 <div className="space-y-0.5">
                   {dayCampaigns.slice(0, 3).map((c) => (
                     <button
@@ -220,17 +182,13 @@ export function MarketingClient({ initialCampaigns }: { initialCampaigns: Campai
         </div>
       </div>
 
-      {/* Unscheduled campaigns */}
-      {campaigns.filter((c) => !c.scheduledDate).length > 0 && (
+      {/* Unscheduled items */}
+      {counts.unscheduled > 0 && (
         <div className="mt-6">
-          <h3 className="text-sm font-medium mb-2 text-stone-500">Unscheduled ({campaigns.filter((c) => !c.scheduledDate).length})</h3>
+          <h3 className="text-sm font-medium mb-2 text-stone-500">Unscheduled ({counts.unscheduled})</h3>
           <div className="flex flex-wrap gap-2">
             {campaigns.filter((c) => !c.scheduledDate).map((c) => (
-              <button
-                key={c.id}
-                onClick={() => setSelectedCampaign(c)}
-                className="rounded-md border px-3 py-1.5 text-xs hover:border-yellow-400 transition-colors flex items-center gap-1.5"
-              >
+              <button key={c.id} onClick={() => setSelectedCampaign(c)} className="rounded-md border px-3 py-1.5 text-xs hover:border-yellow-400 transition-colors flex items-center gap-1.5">
                 <span className={`w-1.5 h-1.5 rounded-full ${STATUS_COLORS[c.status]}`} />
                 {c.title}
                 {c.platform && <Badge className={`${PLATFORM_COLORS[c.platform]} text-[9px] px-1`}>{c.platform}</Badge>}
@@ -240,9 +198,9 @@ export function MarketingClient({ initialCampaigns }: { initialCampaigns: Campai
         </div>
       )}
 
-      {/* Create Campaign Dialog */}
+      {/* Create Dialog */}
       {showCreate && (
-        <CreateCampaignDialog
+        <CreateDialog
           initialDate={createDate}
           onClose={() => setShowCreate(false)}
           onCreate={async (data) => {
@@ -259,37 +217,22 @@ export function MarketingClient({ initialCampaigns }: { initialCampaigns: Campai
         />
       )}
 
-      {/* Campaign Detail Drawer */}
+      {/* Detail Drawer */}
       {selectedCampaign && (
-        <CampaignDrawer
+        <DetailDrawer
           campaign={selectedCampaign}
           onClose={() => setSelectedCampaign(null)}
-          onUpdate={async (updates) => {
-            await fetch(`/api/campaigns/${selectedCampaign.id}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json", "If-Match": "999" },
-              body: JSON.stringify(updates),
-            });
-            refreshCampaigns();
-          }}
-          onDelete={async () => {
-            await fetch(`/api/campaigns/${selectedCampaign.id}`, { method: "DELETE" });
-            setSelectedCampaign(null);
-            refreshCampaigns();
-          }}
+          onSaved={() => { setSelectedCampaign(null); refreshCampaigns(); }}
+          onDeleted={() => { setSelectedCampaign(null); refreshCampaigns(); }}
         />
       )}
     </div>
   );
 }
 
-// ─── Create Campaign Dialog ──────────────────────────
+// ─── Create Dialog ───────────────────────────────────
 
-function CreateCampaignDialog({
-  initialDate,
-  onClose,
-  onCreate,
-}: {
+function CreateDialog({ initialDate, onClose, onCreate }: {
   initialDate: string;
   onClose: () => void;
   onCreate: (data: Record<string, string>) => void;
@@ -301,29 +244,33 @@ function CreateCampaignDialog({
     content: "",
     scheduledDate: initialDate,
     assignedTo: "",
-    status: "draft",
+    status: initialDate ? "scheduled" : "draft",
   });
+
+  // Escape to close
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
 
   return (
     <>
       <div className="fixed inset-0 z-50 bg-black/50" onClick={onClose} />
       <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-background p-6 shadow-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">New Campaign</h3>
+          <h3 className="text-lg font-semibold">New Marketing Item</h3>
           <button onClick={onClose} className="rounded p-1 hover:bg-stone-100"><X className="h-4 w-4" /></button>
         </div>
-
         <div className="space-y-4">
           <div className="space-y-1.5">
             <Label>Title *</Label>
             <Input autoFocus value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g., Speaker Spotlight: Sarah K." />
           </div>
-
           <div className="space-y-1.5">
-            <Label>Content</Label>
-            <Textarea value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} placeholder="Write the post content..." rows={4} />
+            <Label>Notes / Content</Label>
+            <Textarea value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} placeholder="Post content, talking points, links..." rows={4} />
           </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Type</Label>
@@ -345,10 +292,9 @@ function CreateCampaignDialog({
               </select>
             </div>
           </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Scheduled Date</Label>
+              <Label>Date</Label>
               <Input type="date" value={form.scheduledDate} onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })} />
             </div>
             <div className="space-y-1.5">
@@ -356,10 +302,9 @@ function CreateCampaignDialog({
               <AssignedToSelect value={form.assignedTo} onChange={(val) => setForm({ ...form, assignedTo: val })} />
             </div>
           </div>
-
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button disabled={!form.title.trim()} onClick={() => onCreate(form)}>Create Campaign</Button>
+            <Button disabled={!form.title.trim()} onClick={() => onCreate(form)}>Create</Button>
           </div>
         </div>
       </div>
@@ -367,18 +312,13 @@ function CreateCampaignDialog({
   );
 }
 
-// ─── Campaign Detail Drawer ──────────────────────────
+// ─── Detail Drawer ───────────────────────────────────
 
-function CampaignDrawer({
-  campaign,
-  onClose,
-  onUpdate,
-  onDelete,
-}: {
+function DetailDrawer({ campaign, onClose, onSaved, onDeleted }: {
   campaign: Campaign;
   onClose: () => void;
-  onUpdate: (updates: Record<string, unknown>) => void;
-  onDelete: () => void;
+  onSaved: () => void;
+  onDeleted: () => void;
 }) {
   const { confirm: confirmDialog } = useConfirm();
   const [form, setForm] = useState({
@@ -387,7 +327,7 @@ function CampaignDrawer({
     platform: campaign.platform || "twitter",
     content: campaign.content || "",
     status: campaign.status,
-    scheduledDate: campaign.scheduledDate ? new Date(campaign.scheduledDate).toISOString().split("T")[0] : "",
+    scheduledDate: campaign.scheduledDate ? campaign.scheduledDate.slice(0, 10) : "",
     assignedTo: campaign.assignedTo || "",
   });
 
@@ -397,26 +337,33 @@ function CampaignDrawer({
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  const handleSave = () => {
-    onUpdate({
-      title: form.title,
-      type: form.type,
-      platform: form.platform,
-      content: form.content || null,
-      status: form.status,
-      scheduledDate: form.scheduledDate || null,
-      assignedTo: form.assignedTo || null,
+  const handleSave = async () => {
+    await fetch(`/api/campaigns/${campaign.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "If-Match": "999" },
+      body: JSON.stringify({
+        title: form.title,
+        type: form.type,
+        platform: form.platform,
+        content: form.content || null,
+        status: form.status,
+        scheduledDate: form.scheduledDate || null,
+        assignedTo: form.assignedTo || null,
+      }),
     });
+    onSaved();
   };
 
   const handleDelete = async () => {
     const confirmed = await confirmDialog({
-      title: "Delete campaign",
+      title: "Delete marketing item",
       message: `Delete "${campaign.title}"? This cannot be undone.`,
       confirmLabel: "Delete",
       variant: "danger",
     });
-    if (confirmed) onDelete();
+    if (!confirmed) return;
+    await fetch(`/api/campaigns/${campaign.id}`, { method: "DELETE" });
+    onDeleted();
   };
 
   return (
@@ -425,27 +372,20 @@ function CampaignDrawer({
       <aside className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-background border-l shadow-xl flex flex-col">
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-2">
-            <Badge className={`text-[10px] ${PLATFORM_COLORS[form.platform] || "bg-stone-100 text-stone-600"}`}>{form.platform}</Badge>
-            <Badge className={`text-[10px] ${form.status === "published" ? "bg-emerald-50 text-emerald-700" : form.status === "scheduled" ? "bg-yellow-50 text-yellow-700" : "bg-stone-100 text-stone-600"}`}>
-              {STATUS_LABELS[form.status] || form.status}
-            </Badge>
+            {campaign.platform && <Badge className={`text-[10px] ${PLATFORM_COLORS[campaign.platform] || "bg-stone-100"}`}>{campaign.platform}</Badge>}
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={handleDelete} className="rounded p-1.5 hover:bg-red-50 text-stone-400 hover:text-red-500 transition-colors">
-              <Trash2 className="h-4 w-4" />
-            </button>
+            <button onClick={handleDelete} className="rounded p-1.5 hover:bg-red-50 text-stone-400 hover:text-red-500 transition-colors"><Trash2 className="h-4 w-4" /></button>
             <button onClick={onClose} className="rounded p-1.5 hover:bg-stone-100"><X className="h-4 w-4" /></button>
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          <div className="space-y-1.5">
-            <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="text-lg font-medium border-0 px-0 focus-visible:ring-0 shadow-none" placeholder="Campaign title" />
-          </div>
+          <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="text-lg font-medium border-0 px-0 focus-visible:ring-0 shadow-none" placeholder="Title" />
 
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground uppercase tracking-wider">Content</Label>
-            <Textarea value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} placeholder="Write the post content..." rows={6} className="resize-none" />
+            <Label className="text-xs text-muted-foreground uppercase tracking-wider">Notes / Content</Label>
+            <Textarea value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} placeholder="Post content, talking points, links..." rows={6} className="resize-none" />
           </div>
 
           <div className="space-y-3 pt-2 border-t">
@@ -455,7 +395,7 @@ function CampaignDrawer({
                 <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
                   <option value="draft">Draft</option>
                   <option value="scheduled">Scheduled</option>
-                  <option value="published">Published</option>
+                  <option value="published">Done / Published</option>
                   <option value="cancelled">Cancelled</option>
                 </select>
               </div>
@@ -472,13 +412,8 @@ function CampaignDrawer({
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Type</Label>
-                <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                  <option value="speaker_announcement">Speaker Announcement</option>
-                  <option value="sponsor_promo">Sponsor Promo</option>
-                  <option value="event_update">Event Update</option>
-                  <option value="social_post">Social Post</option>
-                </select>
+                <Label className="text-xs text-muted-foreground">Date</Label>
+                <Input type="date" value={form.scheduledDate} onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Assigned To</Label>
@@ -486,23 +421,23 @@ function CampaignDrawer({
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Scheduled Date</Label>
-              <Input type="date" value={form.scheduledDate} onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })} />
+              <Label className="text-xs text-muted-foreground">Type</Label>
+              <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                <option value="speaker_announcement">Speaker Announcement</option>
+                <option value="sponsor_promo">Sponsor Promo</option>
+                <option value="event_update">Event Update</option>
+                <option value="social_post">Social Post</option>
+              </select>
             </div>
           </div>
 
-          {/* Quick actions */}
           {form.status === "draft" && (
             <div className="flex gap-2 pt-2 border-t">
-              <Button size="sm" variant="outline" className="flex-1" onClick={() => {
-                if (form.scheduledDate) {
-                  setForm({ ...form, status: "scheduled" });
-                }
-              }}>
-                <Calendar className="mr-2 h-3 w-3" /> Schedule
+              <Button size="sm" variant="outline" className="flex-1" onClick={() => setForm({ ...form, status: "scheduled" })}>
+                <Calendar className="mr-2 h-3 w-3" /> Mark Scheduled
               </Button>
               <Button size="sm" className="flex-1" onClick={() => setForm({ ...form, status: "published" })}>
-                <Send className="mr-2 h-3 w-3" /> Mark Published
+                <Check className="mr-2 h-3 w-3" /> Mark Done
               </Button>
             </div>
           )}
