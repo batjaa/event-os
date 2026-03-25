@@ -114,13 +114,14 @@ async function handleCount(
   // Apply filters from intent (with alias resolution + ILIKE for string values)
   for (const [key, value] of Object.entries(filters)) {
     const col = resolveField(key);
-    if (col in table && value) {
-      // Use ILIKE for text-like filters (company names, etc.), eq for enums (stage, status)
+    // Try resolved alias first, then original key (e.g. speaker has "company" not "companyName")
+    const actualCol = col in table ? col : key in table ? key : null;
+    if (actualCol && value) {
       const enumFields = ["stage", "status", "priority", "talkType", "type", "platform", "source"];
-      if (enumFields.includes(col)) {
-        conditions.push(eq((table as any)[col], value));
+      if (enumFields.includes(actualCol)) {
+        conditions.push(eq((table as any)[actualCol], value));
       } else {
-        conditions.push(ilike((table as any)[col], `%${value}%`));
+        conditions.push(ilike((table as any)[actualCol], `%${value}%`));
       }
     }
   }
@@ -165,8 +166,10 @@ async function handleList(
   }
 
   for (const [key, value] of Object.entries(filters)) {
-    if (key in table && value) {
-      conditions.push(eq((table as any)[key], value));
+    const col = resolveField(key);
+    const actualCol = col in table ? col : key in table ? key : null;
+    if (actualCol && value) {
+      conditions.push(eq((table as any)[actualCol], value));
     }
   }
 
@@ -269,6 +272,10 @@ async function handleSearch(
     if (row.talkTitle) details.push(`Talk: ${row.talkTitle}`);
     if (row.talkType) details.push(`Type: ${row.talkType}`);
 
+    // Include checklist completion status if entity has checklist items
+    const checklistInfo = await getChecklistStatus(row.id, intent.entityType!, ctx);
+    if (checklistInfo) details.push(checklistInfo);
+
     return {
       message: `Found **${name}**\n${details.join(" | ")}`,
       success: true,
@@ -289,4 +296,53 @@ async function handleSearch(
     success: true,
     data: { items: rows },
   };
+}
+
+// ─── CHECKLIST STATUS ─────────────────────────────────
+
+const CHECKLIST_ENTITY_MAP: Record<string, string> = {
+  speaker: "speaker",
+  sponsor: "sponsor",
+  venue: "venue",
+  booth: "booth",
+  volunteer: "volunteer",
+  media: "media",
+};
+
+async function getChecklistStatus(
+  entityId: string,
+  entityType: string,
+  ctx: AgentContext
+): Promise<string | null> {
+  const checklistEntityType = CHECKLIST_ENTITY_MAP[entityType];
+  if (!checklistEntityType) return null;
+
+  const items = await db
+    .select({
+      status: schema.checklistItems.status,
+    })
+    .from(schema.checklistItems)
+    .where(
+      and(
+        eq(schema.checklistItems.entityId, entityId),
+        eq(schema.checklistItems.entityType, checklistEntityType),
+        eq(schema.checklistItems.organizationId, ctx.orgId)
+      )
+    );
+
+  if (items.length === 0) return null;
+
+  const total = items.length;
+  const approved = items.filter((i) => i.status === "approved").length;
+  const submitted = items.filter((i) => i.status === "submitted").length;
+  const pending = items.filter((i) => i.status === "pending").length;
+
+  if (approved === total) return `Checklist: **all ${total} items complete**`;
+  if (pending === total) return `Checklist: **${total} items pending** (none submitted)`;
+
+  const parts: string[] = [];
+  if (approved > 0) parts.push(`${approved} approved`);
+  if (submitted > 0) parts.push(`${submitted} submitted`);
+  if (pending > 0) parts.push(`${pending} pending`);
+  return `Checklist: ${parts.join(", ")} (${approved}/${total} complete)`;
 }

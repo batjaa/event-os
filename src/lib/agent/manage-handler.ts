@@ -138,6 +138,9 @@ async function handleCreate(
     const resolved = resolveField(key);
     if (allowedCreateFields.includes(resolved) && value) {
       values[resolved] = value;
+    } else if (allowedCreateFields.includes(key) && value) {
+      // Fallback: use original key if alias doesn't match (e.g. speaker has "company" not "companyName")
+      values[key] = value;
     }
   }
 
@@ -260,6 +263,8 @@ async function applyUpdate(
     const resolved = resolveField(key);
     if (allowedUpdateFields.includes(resolved) && value !== undefined) {
       updates[resolved] = value;
+    } else if (allowedUpdateFields.includes(key) && value !== undefined) {
+      updates[key] = value;
     }
   }
 
