@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/confirm-dialog";
 import { NotesButton, NotesPanel } from "@/components/notes-panel";
 import { Trash2, MoreHorizontal } from "lucide-react";
+
+type OrgUser = { id: string; name: string | null; email: string };
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -144,6 +146,91 @@ function StageDropdown({
   );
 }
 
+// ─── User Dropdown (AssignedTo) ──────────────────────────
+
+function UserDropdown({
+  value,
+  users,
+  onSelect,
+}: {
+  value: string | null;
+  users: OrgUser[];
+  onSelect: (name: string, userId: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const initials = (name: string) =>
+    name
+      .split(" ")
+      .map((w) => w[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className={`inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs transition-colors hover:bg-yellow-50 ${
+          value ? "" : "text-stone-300 italic"
+        }`}
+      >
+        {value ? (
+          <>
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-stone-200 text-[9px] font-medium text-stone-600">
+              {initials(value)}
+            </span>
+            <span>{value}</span>
+          </>
+        ) : (
+          "Assign..."
+        )}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full z-50 mt-1 rounded-md border bg-white py-1 shadow-lg min-w-[160px]">
+            {users.map((u) => (
+              <button
+                key={u.id}
+                onClick={() => {
+                  onSelect(u.name || u.email, u.id);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-stone-50 ${
+                  value === u.name ? "font-medium text-yellow-700 bg-yellow-50" : ""
+                }`}
+              >
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-stone-200 text-[9px] font-medium text-stone-600">
+                  {initials(u.name || u.email)}
+                </span>
+                <span className="truncate">{u.name || u.email}</span>
+              </button>
+            ))}
+            {value && (
+              <>
+                <div className="border-t border-stone-100 my-1" />
+                <button
+                  onClick={() => {
+                    onSelect("", null);
+                    setOpen(false);
+                  }}
+                  className="block w-full px-3 py-1.5 text-left text-xs text-stone-400 hover:bg-stone-50"
+                >
+                  Unassign
+                </button>
+              </>
+            )}
+            {users.length === 0 && (
+              <p className="px-3 py-2 text-xs text-stone-400 italic">No team members</p>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Pipeline Table ──────────────────────────────────────
 
 export function PipelineTable<
@@ -152,6 +239,15 @@ export function PipelineTable<
   const patchEndpoint = idEndpoint || apiEndpoint;
   const { confirm } = useConfirm();
   const [notesOpenFor, setNotesOpenFor] = useState<string | null>(null);
+  const [orgUsers, setOrgUsers] = useState<OrgUser[]>([]);
+
+  // Fetch org users for AssignedTo dropdown
+  useEffect(() => {
+    fetch("/api/users")
+      .then((r) => r.json())
+      .then((d) => { if (d.data) setOrgUsers(d.data); })
+      .catch(() => {});
+  }, []);
 
   const handlePatch = async (id: string, field: string, value: string) => {
     await fetch(`${patchEndpoint}/${id}`, {
@@ -234,10 +330,13 @@ export function PipelineTable<
                 />
               </td>
               <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                <InlineEdit
-                  value={item.assignedTo || ""}
-                  placeholder="Assign..."
-                  onSave={(val) => handlePatch(item.id, "assignedTo", val)}
+                <UserDropdown
+                  value={item.assignedTo}
+                  users={orgUsers}
+                  onSelect={(name, userId) => {
+                    handlePatch(item.id, "assignedTo", name);
+                    // TODO: also set assigneeId when PATCH supports it
+                  }}
                 />
               </td>
               <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
