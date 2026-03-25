@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
         userName,
       };
 
-      const result = await dispatch(intent, agentCtx);
+      const result = await dispatch(intent, agentCtx, sanitized.sanitized);
 
       return NextResponse.json({
         data: {

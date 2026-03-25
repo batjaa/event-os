@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { venues } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { requirePermission, isRbacError } from "@/lib/rbac";
+import { checkStageProtection } from "@/lib/api-utils";
 import { generateChecklistItems, archiveChecklistItems } from "@/lib/checklist";
 import { notify } from "@/lib/notify";
 import { users } from "@/db/schema";
@@ -106,6 +107,14 @@ export async function DELETE(
   const { id } = await params;
   const ctx = await requirePermission(req, "venue", "delete");
   if (isRbacError(ctx)) return ctx;
+
+  // Stage protection: non-admins can't delete confirmed entities
+  const entity = await db.query.venues.findFirst({
+    where: and(eq(venues.id, id), eq(venues.organizationId, ctx.orgId)),
+    columns: { stage: true },
+  });
+  const stageBlock = checkStageProtection(entity?.stage, ctx.user.role);
+  if (stageBlock) return stageBlock;
 
   const [deleted] = await db
     .delete(venues)

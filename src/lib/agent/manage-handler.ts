@@ -324,6 +324,18 @@ export async function handleDelete(
     }
 
     const entity = matches[0] as any;
+
+    // Stage protection: confirmed/engaged entities can't be deleted by non-admins
+    // These entities have checklists, portal users, and downstream dependencies.
+    if (entity.stage === "confirmed") {
+      if (ctx.userRole !== "owner" && ctx.userRole !== "admin") {
+        return {
+          message: `**${entity[nameField]}** is confirmed and has active checklists. Only admins can delete confirmed records. Ask an admin if this is really needed.`,
+          success: false,
+        };
+      }
+    }
+
     return {
       message: `Are you sure you want to delete **${entity[nameField]}**? This cannot be undone. Reply "yes" to confirm.`,
       success: true,

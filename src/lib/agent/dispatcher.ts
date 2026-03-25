@@ -1,18 +1,25 @@
 import { AgentIntent, DispatchResult } from "./types";
 import { handleQuery } from "./query-handler";
 import { handleManage } from "./manage-handler";
+import { db } from "@/db";
+import { teamMembers, teams, teamEntityTypes } from "@/db/schema";
+import { eq, and, isNull } from "drizzle-orm";
 
 // ─── Agent Dispatcher ────────────────────────────────
 //
 //  USER INPUT → classify() → AgentIntent
 //       │
 //       ▼
-//  dispatch(intent, ctx) → routes to handler → DispatchResult
+//  dispatch(intent, ctx) → DispatchResult
 //       │
-//       ├── query  → handleQuery() — read-only DB queries
-//       ├── extract → pass through to existing extraction
-//       ├── manage → RBAC check → handleManage()
-//       └── chitchat → return message as-is
+//       ├── 1. Destructive intent detection (bulk/rogue)
+//       ├── 2. RBAC check (role + team scope)
+//       ├── 3. Route to handler
+//       │     ├── query  → handleQuery()
+//       │     ├── manage → handleManage()
+//       │     ├── extract → pass through
+//       │     └── chitchat → message
+//       └── 4. Stage protection (in manage handler)
 
 export type AgentContext = {
   orgId: string;
@@ -22,31 +29,79 @@ export type AgentContext = {
   userName: string | null;
 };
 
-// ─── RBAC for agent actions ──────────────────────────
+// ─── Layer 1: Destructive Intent Detection ───────────
+//
+//  Catches bulk/mass operations BEFORE RBAC — these are
+//  dangerous regardless of role. Even admins should use
+//  the UI for bulk operations, not the chat agent.
+//
+//  "Delete all speakers" → blocked
+//  "Update every sponsor's name" → blocked
+//  "Remove all booths" → blocked
+//  "Delete speaker Bob" → allowed (single entity, goes to RBAC)
+
+const BULK_PATTERNS = [
+  /\b(all|every|each|entire|whole)\b.*\b(speaker|sponsor|venue|booth|volunteer|media|task|campaign|attendee)/i,
+  /\b(speaker|sponsor|venue|booth|volunteer|media|task|campaign|attendee)s?\b.*\b(all|every|everything)\b/i,
+  /\bdelete\b.*\bmultipl/i,
+  /\bremove\b.*\b(all|every)\b/i,
+  /\bwipe\b/i,
+  /\bclear\b.*\b(all|every|table|data)/i,
+  /\breset\b.*\b(all|every|data)/i,
+  /\bstart\s*over\b/i,
+  /\btruncate\b/i,
+  /\bdrop\b/i,
+];
+
+function detectDestructiveBulk(
+  intent: AgentIntent,
+  originalInput?: string
+): DispatchResult | null {
+  // Only check mutations
+  if (intent.intent !== "manage") return null;
+  if (!intent.action || intent.action === "search") return null;
+
+  // Check the original user input for bulk language
+  const textToCheck = originalInput || intent.message || "";
+  for (const pattern of BULK_PATTERNS) {
+    if (pattern.test(textToCheck)) {
+      if (intent.action === "delete" || intent.action === "update") {
+        return {
+          message: "I can only modify one record at a time. Bulk operations need to be done by an admin through the dashboard. Which specific record would you like to change?",
+          success: false,
+        };
+      }
+    }
+  }
+
+  // Agent handlers only operate on single entities (by name search).
+  // This is enforced at the code level — there's no "delete where stage=X" path.
+  return null;
+}
+
+// ─── Layer 2: RBAC ───────────────────────────────────
 //
 //  ROLE HIERARCHY (mirrors src/lib/rbac.ts):
 //    owner(100) > admin(80) > organizer(60) > coordinator(40) > viewer(20) > stakeholder(10)
 //
 //  Rules:
-//  - query: ALL roles allowed (read-only)
-//  - manage/create: viewer and stakeholder blocked
-//  - manage/update: viewer and stakeholder blocked
-//  - manage/delete: viewer, stakeholder, and coordinator blocked
-//  - extract: viewer and stakeholder blocked (creates entities)
+//  - query/chitchat: ALL roles allowed (read-only)
+//  - manage/create: organizer+ with team scope
+//  - manage/update: organizer+ with team scope (coordinator can update)
+//  - manage/delete: organizer+ with team scope (coordinator CANNOT delete)
+//  - extract: same as create
 
 const ROLE_LEVEL: Record<string, number> = {
   owner: 100, admin: 80, organizer: 60, coordinator: 40, viewer: 20, stakeholder: 10,
 };
 
-function checkAgentPermission(
+async function checkAgentPermission(
   intent: AgentIntent,
   ctx: AgentContext
-): DispatchResult | null {
-  const level = ROLE_LEVEL[ctx.userRole] || 0;
-
-  // Queries are always allowed — read-only
+): Promise<DispatchResult | null> {
+  // Queries and chitchat are always allowed
   if (intent.intent === "query" || intent.intent === "chitchat") {
-    return null; // allowed
+    return null;
   }
 
   // Stakeholders can only read
@@ -68,25 +123,71 @@ function checkAgentPermission(
   // Coordinators can't delete
   if (intent.intent === "manage" && intent.action === "delete" && ctx.userRole === "coordinator") {
     return {
-      message: "Coordinators can't delete records. Ask an organizer or admin to delete this.",
+      message: "Coordinators can't delete records. Ask an organizer or admin.",
       success: false,
     };
   }
 
-  // Organizer, admin, owner — allowed for create/update
-  // Coordinator — allowed for create/update only
-  return null; // allowed
+  // Owner/admin bypass team scope
+  if (ROLE_LEVEL[ctx.userRole] >= ROLE_LEVEL.admin) {
+    return null;
+  }
+
+  // Organizer/coordinator: check team scope for the entity type
+  if (intent.intent === "manage" && intent.entityType) {
+    const hasScope = await userOwnsEntityType(ctx.userId, intent.entityType, ctx.orgId);
+    if (!hasScope) {
+      return {
+        message: `You don't have permission to manage ${intent.entityType}s. Your team doesn't cover this entity type. Ask an admin to update your team assignments.`,
+        success: false,
+      };
+    }
+  }
+
+  return null;
 }
+
+// Duplicated from rbac.ts to avoid NextRequest dependency
+async function userOwnsEntityType(
+  userId: string,
+  entityType: string,
+  orgId: string
+): Promise<boolean> {
+  const result = await db
+    .select({ entityType: teamEntityTypes.entityType })
+    .from(teamMembers)
+    .innerJoin(teams, eq(teamMembers.teamId, teams.id))
+    .innerJoin(teamEntityTypes, eq(teams.id, teamEntityTypes.teamId))
+    .where(
+      and(
+        eq(teamMembers.userId, userId),
+        eq(teams.organizationId, orgId),
+        isNull(teams.editionId),
+        eq(teamEntityTypes.entityType, entityType)
+      )
+    )
+    .limit(1);
+
+  return result.length > 0;
+}
+
+// ─── Dispatch ────────────────────────────────────────
 
 export async function dispatch(
   intent: AgentIntent,
-  ctx: AgentContext
+  ctx: AgentContext,
+  originalInput?: string
 ): Promise<DispatchResult> {
   try {
-    // RBAC check before any mutation
-    const denied = checkAgentPermission(intent, ctx);
+    // Layer 1: Block bulk/destructive operations
+    const bulk = detectDestructiveBulk(intent, originalInput);
+    if (bulk) return bulk;
+
+    // Layer 2: RBAC check (role + team scope)
+    const denied = await checkAgentPermission(intent, ctx);
     if (denied) return denied;
 
+    // Layer 3: Route to handler
     switch (intent.intent) {
       case "query":
         return handleQuery(intent, ctx);
@@ -95,9 +196,8 @@ export async function dispatch(
         return handleManage(intent, ctx);
 
       case "extract":
-        // Pass through — the chat panel handles extraction via the existing flow
         return {
-          message: "__EXTRACT__", // sentinel value: chat panel uses extract() instead
+          message: "__EXTRACT__",
           success: true,
         };
 

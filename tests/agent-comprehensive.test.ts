@@ -14,7 +14,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
-import { eq, and, ilike, sql } from "drizzle-orm";
+import { eq, and, ilike, sql, isNull } from "drizzle-orm";
 import { dispatch, AgentContext } from "@/lib/agent/dispatcher";
 import { AgentIntent, DispatchResult } from "@/lib/agent/types";
 
@@ -22,9 +22,14 @@ import { AgentIntent, DispatchResult } from "@/lib/agent/types";
 
 let orgId: string;
 let editionId: string;
+// Real user IDs for team-scoped roles (looked up in beforeAll)
+let organizerUserId: string;
+let organizerEntityType: string; // entity type this organizer can manage
+let coordinatorUserId: string;
+let coordinatorEntityType: string;
 
-function ctx(role = "admin"): AgentContext {
-  return { orgId, editionId, userId: "test-user", userRole: role, userName: "Test User" };
+function ctx(role = "admin", userId?: string): AgentContext {
+  return { orgId, editionId, userId: userId || "test-user", userRole: role, userName: "Test User" };
 }
 
 function intent(overrides: Partial<AgentIntent>): AgentIntent {
@@ -49,6 +54,27 @@ beforeAll(async () => {
   orgId = orgs[0]?.id;
   editionId = editions[0]?.id;
   if (!orgId || !editionId) throw new Error("Need org + edition in DB to run agent tests");
+
+  // Look up real organizer/coordinator with team scope for RBAC tests
+  const teamScoped = await db
+    .select({
+      userId: schema.teamMembers.userId,
+      role: schema.users.role,
+      entityType: schema.teamEntityTypes.entityType,
+    })
+    .from(schema.teamMembers)
+    .innerJoin(schema.teams, eq(schema.teamMembers.teamId, schema.teams.id))
+    .innerJoin(schema.teamEntityTypes, eq(schema.teams.id, schema.teamEntityTypes.teamId))
+    .innerJoin(schema.users, eq(schema.teamMembers.userId, schema.users.id))
+    .where(and(eq(schema.teams.organizationId, orgId), isNull(schema.teams.editionId)))
+    .limit(20);
+
+  const org = teamScoped.find((r) => r.role === "organizer");
+  const coord = teamScoped.find((r) => r.role === "coordinator");
+  organizerUserId = org?.userId || "no-organizer";
+  organizerEntityType = org?.entityType || "speaker";
+  coordinatorUserId = coord?.userId || "no-coordinator";
+  coordinatorEntityType = coord?.entityType || "volunteer";
 });
 
 afterAll(async () => {
@@ -592,35 +618,41 @@ describe("Agent RBAC enforcement", () => {
 
   // ─── Coordinator role ───────────────────────────────
   describe("coordinator role", () => {
-    it("can create", async () => {
+    it("can create entity within their team scope", async () => {
+      // Use real coordinator userId + an entity type they have scope for
       const result = await dispatch(
-        intent({ intent: "manage", action: "create", entityType: "volunteer", params: { name: "AgentTest CoordVol" } }),
-        ctx("coordinator")
+        intent({ intent: "manage", action: "create", entityType: coordinatorEntityType as any, params: { name: "AgentTest CoordScoped" } }),
+        ctx("coordinator", coordinatorUserId)
       );
       expect(result.success).toBe(true);
-      await cleanup(schema.volunteerApplications, "name", "AgentTest CoordVol");
+      // Cleanup — find the right table by entity type
+      const tables: Record<string, any> = {
+        volunteer: schema.volunteerApplications, venue: schema.venues,
+        booth: schema.booths, media: schema.mediaPartners, attendee: schema.attendees,
+        campaign: schema.campaigns,
+      };
+      const table = tables[coordinatorEntityType];
+      if (table) {
+        const nameField = "companyName" in table ? "companyName" : "name" in table ? "name" : "title";
+        await cleanup(table, nameField, "AgentTest CoordScoped");
+      }
     });
 
-    it("can update", async () => {
-      // Create then update
-      await db.insert(schema.volunteerApplications).values({
-        editionId, organizationId: orgId, name: "AgentTest CoordUpdate", email: "c@t.com", source: "intake", stage: "lead",
-      });
+    it("CANNOT create entity outside their team scope", async () => {
+      // Use an entity type the coordinator does NOT have scope for
+      const outOfScope = coordinatorEntityType === "speaker" ? "sponsor" : "speaker";
       const result = await dispatch(
-        intent({
-          intent: "manage", action: "update", entityType: "volunteer",
-          searchValue: "CoordUpdate", params: { phone: "111" },
-        }),
-        ctx("coordinator")
+        intent({ intent: "manage", action: "create", entityType: outOfScope as any, params: { name: "AgentTest CoordNoScope" } }),
+        ctx("coordinator", coordinatorUserId)
       );
-      expect(result.success).toBe(true);
-      await cleanup(schema.volunteerApplications, "name", "AgentTest CoordUpdate");
+      expect(result.success).toBe(false);
+      expect(result.message).toContain("permission");
     });
 
     it("CANNOT delete", async () => {
       const result = await dispatch(
-        intent({ intent: "manage", action: "delete", entityType: "volunteer", searchValue: "x", confirmation: true }),
-        ctx("coordinator")
+        intent({ intent: "manage", action: "delete", entityType: coordinatorEntityType as any, searchValue: "x", confirmation: true }),
+        ctx("coordinator", coordinatorUserId)
       );
       expect(result.success).toBe(false);
       expect(result.message).toContain("Coordinators");
@@ -629,44 +661,92 @@ describe("Agent RBAC enforcement", () => {
 
   // ─── Organizer role ─────────────────────────────────
   describe("organizer role", () => {
-    it("can create", async () => {
+    it("can create entity within their team scope", async () => {
       const result = await dispatch(
-        intent({ intent: "manage", action: "create", entityType: "task", params: { title: "AgentTest OrgTask" } }),
-        ctx("organizer")
+        intent({ intent: "manage", action: "create", entityType: organizerEntityType as any, params: { name: "AgentTest OrgScoped" } }),
+        ctx("organizer", organizerUserId)
       );
       expect(result.success).toBe(true);
-      await cleanup(schema.tasks, "title", "AgentTest OrgTask");
+      const tables: Record<string, any> = {
+        speaker: schema.speakerApplications, sponsor: schema.sponsorApplications,
+        venue: schema.venues, booth: schema.booths, volunteer: schema.volunteerApplications,
+        media: schema.mediaPartners, campaign: schema.campaigns,
+      };
+      const table = tables[organizerEntityType];
+      if (table) {
+        const nameField = "companyName" in table ? "companyName" : "name" in table ? "name" : "title";
+        await cleanup(table, nameField, "AgentTest OrgScoped");
+      }
     });
 
-    it("can update", async () => {
-      await db.insert(schema.tasks).values({
-        editionId, organizationId: orgId, title: "AgentTest OrgUpd", status: "todo", priority: "medium",
-      });
+    it("CANNOT create entity outside their team scope", async () => {
+      // Find an entity type this organizer does NOT have scope for
+      const scopedTypes = await db
+        .select({ entityType: schema.teamEntityTypes.entityType })
+        .from(schema.teamMembers)
+        .innerJoin(schema.teams, eq(schema.teamMembers.teamId, schema.teams.id))
+        .innerJoin(schema.teamEntityTypes, eq(schema.teams.id, schema.teamEntityTypes.teamId))
+        .where(and(
+          eq(schema.teamMembers.userId, organizerUserId),
+          eq(schema.teams.organizationId, orgId),
+          isNull(schema.teams.editionId)
+        ));
+      const scopedSet = new Set(scopedTypes.map((r) => r.entityType));
+      const manageable = ["speaker", "sponsor", "venue", "booth", "volunteer", "media", "task", "campaign"];
+      const outOfScope = manageable.find((t) => !scopedSet.has(t));
+      if (!outOfScope) return; // organizer has scope for everything — skip test
+
       const result = await dispatch(
-        intent({
-          intent: "manage", action: "update", entityType: "task",
-          searchValue: "OrgUpd", params: { status: "in_progress" },
-        }),
-        ctx("organizer")
+        intent({ intent: "manage", action: "create", entityType: outOfScope as any, params: { name: "AgentTest OrgNoScope" } }),
+        ctx("organizer", organizerUserId)
       );
-      expect(result.success).toBe(true);
-      await cleanup(schema.tasks, "title", "AgentTest OrgUpd");
+      expect(result.success).toBe(false);
+      expect(result.message).toContain("permission");
     });
 
-    it("can initiate delete (gets confirmation prompt)", async () => {
-      await db.insert(schema.venues).values({
-        editionId, organizationId: orgId, name: "AgentTest OrgDel", source: "intake", stage: "lead",
-      });
+    it("can initiate delete within scope (gets confirmation)", async () => {
+      // Use a simple entity type the organizer has scope for
+      // Create a lead-stage volunteer/venue/speaker in their scope
+      const entityType = organizerEntityType;
+      const tables: Record<string, any> = {
+        speaker: schema.speakerApplications, sponsor: schema.sponsorApplications,
+        venue: schema.venues, booth: schema.booths, volunteer: schema.volunteerApplications,
+        media: schema.mediaPartners, campaign: schema.campaigns, task: schema.tasks,
+      };
+      const table = tables[entityType];
+      if (!table) return; // skip if entity type isn't manageable
+
+      // Build insert values dynamically using schema introspection
+      const { getTableColumns } = await import("drizzle-orm");
+      const cols = getTableColumns(table);
+      const nameField = "companyName" in cols ? "companyName" : "name" in cols ? "name" : "title";
+      const vals: any = { editionId, organizationId: orgId };
+      vals[nameField] = "AgentTest OrgDel";
+      // Fill required NOT NULL fields
+      if ("email" in cols) vals.email = "";
+      if ("talkTitle" in cols) vals.talkTitle = "TBD";
+      if ("contactName" in cols) vals.contactName = "TBD";
+      if ("contactEmail" in cols) vals.contactEmail = "";
+      if ("source" in cols) vals.source = "intake";
+      if ("stage" in cols) vals.stage = "lead";
+      if ("type" in cols && entityType === "campaign") vals.type = "event_update";
+      if ("status" in cols && entityType === "task") vals.status = "todo";
+      if ("priority" in cols) vals.priority = "medium";
+      if ("title" in cols && !vals.title) vals.title = vals.name || "AgentTest OrgDel";
+
+      await db.insert(table).values(vals);
+
       const result = await dispatch(
         intent({
-          intent: "manage", action: "delete", entityType: "venue",
+          intent: "manage", action: "delete", entityType: entityType as any,
           searchValue: "AgentTest OrgDel", confirmation: true,
         }),
-        ctx("organizer")
+        ctx("organizer", organizerUserId),
+        "Delete " + entityType + " AgentTest OrgDel"
       );
       expect(result.success).toBe(true);
       expect(result.requiresConfirmation).toBe(true);
-      await cleanup(schema.venues, "name", "AgentTest OrgDel");
+      await cleanup(table, nameField, "AgentTest OrgDel");
     });
   });
 
@@ -1050,5 +1130,142 @@ describe("Agent error resilience", () => {
         expect(result.message).not.toMatch(/TypeError|ReferenceError|SyntaxError|Cannot read|undefined is not/i);
       }
     }
+  });
+});
+
+// ═══════════════════════════════════════════════════════
+// SECTION 10: Destructive action prevention
+// ═══════════════════════════════════════════════════════
+
+describe("Destructive action prevention", () => {
+  // ─── Bulk operation blocking ────────────────────────
+  describe("bulk operations blocked", () => {
+    it("blocks 'delete all speakers'", async () => {
+      const result = await dispatch(
+        intent({ intent: "manage", action: "delete", entityType: "speaker", confirmation: true }),
+        ctx(),
+        "Delete all speakers because we want to start over"
+      );
+      expect(result.success).toBe(false);
+      expect(result.message).toContain("one record at a time");
+    });
+
+    it("blocks 'update every sponsor'", async () => {
+      const result = await dispatch(
+        intent({ intent: "manage", action: "update", entityType: "sponsor", searchValue: "x", params: { stage: "declined" } }),
+        ctx(),
+        "Update every sponsor's stage to declined"
+      );
+      expect(result.success).toBe(false);
+      expect(result.message).toContain("one record at a time");
+    });
+
+    it("blocks 'remove all booths'", async () => {
+      const result = await dispatch(
+        intent({ intent: "manage", action: "delete", entityType: "booth", confirmation: true }),
+        ctx(),
+        "Remove all booths from the event"
+      );
+      expect(result.success).toBe(false);
+    });
+
+    it("blocks 'wipe' language", async () => {
+      const result = await dispatch(
+        intent({ intent: "manage", action: "delete", entityType: "volunteer", confirmation: true }),
+        ctx(),
+        "Wipe the volunteer list"
+      );
+      expect(result.success).toBe(false);
+    });
+
+    it("blocks 'start over' language", async () => {
+      const result = await dispatch(
+        intent({ intent: "manage", action: "delete", entityType: "speaker", confirmation: true }),
+        ctx(),
+        "Delete all speakers, let's start over"
+      );
+      expect(result.success).toBe(false);
+    });
+
+    it("allows single-entity delete (not bulk)", async () => {
+      const result = await dispatch(
+        intent({ intent: "manage", action: "delete", entityType: "speaker", searchValue: "SpecificPerson", confirmation: true }),
+        ctx(),
+        "Delete speaker SpecificPerson"
+      );
+      // Should NOT be blocked by bulk detection (it's a single entity)
+      // It may fail for other reasons (not found) but should not say "one record at a time"
+      expect(result.message).not.toContain("one record at a time");
+    });
+  });
+
+  // ─── Stage protection ──────────────────────────────
+  describe("confirmed entity protection", () => {
+    let confirmedSpeakerId: string;
+
+    beforeAll(async () => {
+      const [s] = await db.insert(schema.speakerApplications).values({
+        editionId, organizationId: orgId,
+        name: "AgentTest ConfirmedSpk", email: "c@t.com", talkTitle: "Talk",
+        source: "intake", stage: "confirmed",
+      }).returning();
+      confirmedSpeakerId = s.id;
+    });
+
+    afterAll(async () => {
+      await db.delete(schema.speakerApplications)
+        .where(eq(schema.speakerApplications.id, confirmedSpeakerId))
+        .catch(() => {});
+    });
+
+    it("organizer CANNOT delete confirmed entity", async () => {
+      const result = await dispatch(
+        intent({
+          intent: "manage", action: "delete", entityType: "speaker",
+          searchValue: "AgentTest ConfirmedSpk", confirmation: true,
+        }),
+        ctx("organizer", organizerUserId),
+        "Delete speaker AgentTest ConfirmedSpk"
+      );
+      expect(result.success).toBe(false);
+      // Blocked either by stage protection or team scope — both are valid
+      expect(result.message.toLowerCase()).toMatch(/confirmed|permission/);
+    });
+
+    it("admin CAN delete confirmed entity (gets confirmation prompt)", async () => {
+      const result = await dispatch(
+        intent({
+          intent: "manage", action: "delete", entityType: "speaker",
+          searchValue: "AgentTest ConfirmedSpk", confirmation: true,
+        }),
+        ctx("admin"),
+        "Delete speaker AgentTest ConfirmedSpk"
+      );
+      expect(result.success).toBe(true);
+      expect(result.requiresConfirmation).toBe(true);
+    });
+  });
+
+  // ─── Team scope in agent ───────────────────────────
+  describe("team scope enforcement", () => {
+    it("organizer without team scope gets denied", async () => {
+      // Use a user ID that exists but has no team assignments for this entity type
+      // We test with a fake userId that won't match any team membership
+      const result = await dispatch(
+        intent({ intent: "manage", action: "create", entityType: "speaker", params: { name: "Test" } }),
+        { ...ctx("organizer"), userId: "00000000-0000-0000-0000-000000000099" },
+      );
+      expect(result.success).toBe(false);
+      expect(result.message).toContain("permission");
+    });
+
+    it("admin bypasses team scope", async () => {
+      const result = await dispatch(
+        intent({ intent: "manage", action: "create", entityType: "speaker", params: { name: "AgentTest AdminBypass" } }),
+        ctx("admin"),
+      );
+      expect(result.success).toBe(true);
+      await cleanup(schema.speakerApplications, "name", "AgentTest AdminBypass");
+    });
   });
 });

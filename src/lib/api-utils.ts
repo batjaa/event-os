@@ -65,6 +65,21 @@ export function checkVersion(
   return null;
 }
 
+// Stage protection: non-admins can't delete confirmed entities
+// Confirmed entities have checklists, portal users, and downstream dependencies.
+export function checkStageProtection(
+  stage: string | null | undefined,
+  role: string
+): NextResponse | null {
+  if (stage === "confirmed" && role !== "owner" && role !== "admin") {
+    return NextResponse.json(
+      { error: "Confirmed records can't be deleted. Only admins can delete confirmed records." },
+      { status: 403 }
+    );
+  }
+  return null;
+}
+
 export function paginationParams(req: NextRequest) {
   const url = new URL(req.url);
   const limit = Math.min(
