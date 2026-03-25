@@ -7,6 +7,7 @@ import {
   uuid,
   varchar,
   index,
+  uniqueIndex,
   jsonb,
   pgEnum,
 } from "drizzle-orm/pg-core";
@@ -154,6 +155,7 @@ export const speakerApplications = pgTable(
     source: varchar("source", { length: 50 }).default("intake").notNull(), // intake | outreach | sponsored
     stage: varchar("stage", { length: 50 }).default("lead").notNull(), // lead | engaged | confirmed | declined
     assignedTo: varchar("assigned_to", { length: 255 }),
+    assigneeId: uuid("assignee_id").references(() => users.id, { onDelete: "set null" }),
     // Meta
     version: integer("version").default(1).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -224,6 +226,7 @@ export const sponsorApplications = pgTable(
     source: varchar("source", { length: 50 }).default("intake").notNull(),
     stage: varchar("stage", { length: 50 }).default("lead").notNull(),
     assignedTo: varchar("assigned_to", { length: 255 }),
+    assigneeId: uuid("assignee_id").references(() => users.id, { onDelete: "set null" }),
     version: integer("version").default(1).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -255,6 +258,7 @@ export const attendees = pgTable(
     source: varchar("source", { length: 50 }).default("intake").notNull(),
     stage: varchar("stage", { length: 50 }).default("lead").notNull(),
     assignedTo: varchar("assigned_to", { length: 255 }),
+    assigneeId: uuid("assignee_id").references(() => users.id, { onDelete: "set null" }),
     version: integer("version").default(1).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
@@ -308,6 +312,7 @@ export const venues = pgTable(
     status: varchar("status", { length: 50 }).default("identified").notNull(), // identified, contacted, negotiating, proposal_received, finalized, declined
     isFinalized: boolean("is_finalized").default(false).notNull(),
     assignedTo: varchar("assigned_to", { length: 255 }), // organizer responsible
+    assigneeId: uuid("assignee_id").references(() => users.id, { onDelete: "set null" }),
     pros: text("pros"),
     cons: text("cons"),
     mainImageUrl: text("main_image_url"),
@@ -346,6 +351,7 @@ export const outreach = pgTable(
     role: varchar("role", { length: 255 }), // their title/role
     status: varchar("status", { length: 50 }).default("identified").notNull(), // identified, contacted, interested, negotiating, confirmed, declined, converted
     assignedTo: varchar("assigned_to", { length: 255 }), // team member responsible
+    assigneeId: uuid("assignee_id").references(() => users.id, { onDelete: "set null" }),
     lastContactDate: timestamp("last_contact_date"),
     nextFollowUp: timestamp("next_follow_up"),
     source: varchar("source", { length: 255 }), // how we found them
@@ -369,8 +375,7 @@ export const teams = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     editionId: uuid("edition_id")
-      .notNull()
-      .references(() => eventEditions.id, { onDelete: "cascade" }),
+      .references(() => eventEditions.id, { onDelete: "cascade" }), // nullable for org-wide RBAC teams
     organizationId: uuid("organization_id")
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
@@ -379,6 +384,22 @@ export const teams = pgTable(
     sortOrder: integer("sort_order").default(0).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   }
+);
+
+// ─── Team → Entity Type Mapping (RBAC) ──────────────────
+
+export const teamEntityTypes = pgTable(
+  "team_entity_types",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    teamId: uuid("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    entityType: varchar("entity_type", { length: 50 }).notNull(), // speaker, sponsor, venue, etc.
+  },
+  (table) => [
+    uniqueIndex("team_entity_type_uniq").on(table.teamId, table.entityType),
+  ]
 );
 
 export const teamMembers = pgTable(
@@ -459,6 +480,7 @@ export const invitations = pgTable(
     source: varchar("source", { length: 50 }).default("intake").notNull(),
     stage: varchar("stage", { length: 50 }).default("lead").notNull(),
     assignedTo: varchar("assigned_to", { length: 255 }),
+    assigneeId: uuid("assignee_id").references(() => users.id, { onDelete: "set null" }),
     version: integer("version").default(1).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
@@ -496,6 +518,7 @@ export const volunteerApplications = pgTable(
     source: varchar("source", { length: 50 }).default("intake").notNull(),
     stage: varchar("stage", { length: 50 }).default("lead").notNull(),
     assignedTo: varchar("assigned_to", { length: 255 }),
+    assigneeId: uuid("assignee_id").references(() => users.id, { onDelete: "set null" }),
     version: integer("version").default(1).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -532,6 +555,7 @@ export const booths = pgTable(
     source: varchar("source", { length: 50 }).default("intake").notNull(),
     stage: varchar("stage", { length: 50 }).default("lead").notNull(),
     assignedTo: varchar("assigned_to", { length: 255 }),
+    assigneeId: uuid("assignee_id").references(() => users.id, { onDelete: "set null" }),
     version: integer("version").default(1).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -567,6 +591,7 @@ export const mediaPartners = pgTable(
     source: varchar("source", { length: 50 }).default("intake").notNull(),
     stage: varchar("stage", { length: 50 }).default("lead").notNull(),
     assignedTo: varchar("assigned_to", { length: 255 }),
+    assigneeId: uuid("assignee_id").references(() => users.id, { onDelete: "set null" }),
     version: integer("version").default(1).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -605,6 +630,7 @@ export const campaigns = pgTable(
     notes: text("notes"),
     source: varchar("source", { length: 50 }).default("intake").notNull(),
     assignedTo: varchar("assigned_to", { length: 255 }),
+    assigneeId: uuid("assignee_id").references(() => users.id, { onDelete: "set null" }),
     version: integer("version").default(1).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
