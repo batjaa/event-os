@@ -218,8 +218,14 @@ export function MarketingClient({ initialCampaigns }: { initialCampaigns: Campai
         <DetailDrawer
           campaign={selectedCampaign}
           onClose={() => setSelectedCampaign(null)}
-          onSaved={async () => { await refreshCampaigns(); setSelectedCampaign(null); }}
-          onDeleted={async () => { setSelectedCampaign(null); await refreshCampaigns(); }}
+          onSaved={(updated) => {
+            setCampaigns((prev) => prev.map((c) => c.id === updated.id ? updated : c));
+            setSelectedCampaign(null);
+          }}
+          onDeleted={() => {
+            setCampaigns((prev) => prev.filter((c) => c.id !== selectedCampaign.id));
+            setSelectedCampaign(null);
+          }}
         />
       )}
     </div>
@@ -313,7 +319,7 @@ function CreateDialog({ initialDate, onClose, onCreate }: {
 function DetailDrawer({ campaign, onClose, onSaved, onDeleted }: {
   campaign: Campaign;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (updated: Campaign) => void;
   onDeleted: () => void;
 }) {
   const { confirm: confirmDialog } = useConfirm();
@@ -334,7 +340,7 @@ function DetailDrawer({ campaign, onClose, onSaved, onDeleted }: {
   }, [onClose]);
 
   const handleSave = async () => {
-    await fetch(`/api/campaigns/${campaign.id}`, {
+    const res = await fetch(`/api/campaigns/${campaign.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", "If-Match": "999" },
       body: JSON.stringify({
@@ -347,7 +353,10 @@ function DetailDrawer({ campaign, onClose, onSaved, onDeleted }: {
         assignedTo: form.assignedTo || null,
       }),
     });
-    await onSaved();
+    if (res.ok) {
+      const d = await res.json();
+      onSaved(d.data);
+    }
   };
 
   const handleDelete = async () => {
