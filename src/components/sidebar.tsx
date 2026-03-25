@@ -91,7 +91,8 @@ export function Sidebar({ onToggleChat }: { onToggleChat?: () => void }) {
       .then((d) => {
         if (d.data?.length) {
           setEditions(d.data);
-          setActiveEdition(d.data[0].name);
+          const active = d.data.find((e: Edition) => e.id === d.activeEditionId) || d.data[0];
+          setActiveEdition(active.name);
         }
       })
       .catch(() => {});
