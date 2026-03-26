@@ -27,6 +27,7 @@ import {
   Mail,
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { LocaleSwitcher } from "@/components/locale-switcher";
 
 type NavGroup = {
   label: string;
@@ -339,6 +340,7 @@ export function Sidebar({ onToggleChat, chatOpen }: { onToggleChat?: () => void;
           <Settings className="h-4 w-4 shrink-0" />
           <span>Settings</span>
         </Link>
+        <LocaleSwitcher />
       </div>
     </>
   );
