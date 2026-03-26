@@ -58,4 +58,23 @@ if [ "$FOUND_SECRETS" -eq 1 ]; then
 fi
 
 echo -e "${GREEN}Secret scan passed. No credentials found.${NC}"
+
+# ─── Run unit tests ─────────────────────────────────────
+echo -e "${YELLOW}Running unit tests...${NC}"
+
+if npx vitest run tests/unit --reporter=dot 2>&1 | tail -5; then
+  TESTS_EXIT=${PIPESTATUS[0]}
+else
+  TESTS_EXIT=1
+fi
+
+if [ "$TESTS_EXIT" -ne 0 ]; then
+  echo ""
+  echo -e "${RED}COMMIT BLOCKED: Unit tests failed.${NC}"
+  echo -e "Fix the failing tests before committing."
+  echo -e "To skip: git commit --no-verify"
+  exit 1
+fi
+
+echo -e "${GREEN}All checks passed.${NC}"
 exit 0
