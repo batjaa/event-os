@@ -12,9 +12,9 @@ type BaseNotifyParams = {
   actorName?: string;
 };
 
-type RawNotifyParams = BaseNotifyParams & {
+export type RawNotifyParams = BaseNotifyParams & {
   title: string;
-  message?: string;
+  message?: string | null;
 };
 
 type I18nNotifyParams = BaseNotifyParams & {
@@ -75,15 +75,26 @@ async function resolveContent(params: NotifyParams): Promise<{ title: string; me
  */
 export async function notify(params: NotifyParams): Promise<void> {
   try {
+    const { title, message } = await resolveContent(params);
+
     if (process.env.QUEUE_ENABLED === "true") {
       const { dispatch, sendNotificationJob } = await import("@/lib/queue");
-      await dispatch(sendNotificationJob, params, {
+      // Resolve i18n before dispatching — worker may not have next-intl
+      await dispatch(sendNotificationJob, {
+        userId: params.userId,
+        orgId: params.orgId,
+        type: params.type,
+        title,
+        message,
+        link: params.link,
+        entityType: params.entityType,
+        entityId: params.entityId,
+        actorName: params.actorName,
+      }, {
         organizationId: params.orgId,
       });
       return;
     }
-
-    const { title, message } = await resolveContent(params);
 
     await db.insert(notifications).values({
       userId: params.userId,
@@ -112,6 +123,9 @@ export async function notifyMany(
   params: Omit<NotifyParams, "userId">
 ): Promise<void> {
   try {
+    // Resolve i18n once for all recipients (same content, different userId)
+    const { title, message } = await resolveContent(params as NotifyParams);
+
     if (process.env.QUEUE_ENABLED === "true") {
       const { dispatchMany, sendNotificationJob } = await import(
         "@/lib/queue"
@@ -119,7 +133,17 @@ export async function notifyMany(
       await dispatchMany(
         sendNotificationJob,
         userIds.map((userId) => ({
-          payload: { ...params, userId },
+          payload: {
+            userId,
+            orgId: params.orgId,
+            type: params.type,
+            title,
+            message,
+            link: params.link,
+            entityType: params.entityType,
+            entityId: params.entityId,
+            actorName: params.actorName,
+          },
           organizationId: params.orgId,
         }))
       );
@@ -127,7 +151,17 @@ export async function notifyMany(
     }
 
     for (const userId of userIds) {
-      await notify({ ...params, userId } as NotifyParams);
+      await db.insert(notifications).values({
+        userId,
+        organizationId: params.orgId,
+        type: params.type,
+        title,
+        message,
+        link: params.link || null,
+        entityType: params.entityType || null,
+        entityId: params.entityId || null,
+        actorName: params.actorName || null,
+      });
     }
   } catch (error) {
     console.error("Failed to create notifications:", error);
