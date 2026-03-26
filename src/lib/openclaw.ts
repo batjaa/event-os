@@ -240,6 +240,7 @@ export function configureDiscord(opts: {
     enabled: true,
     token: opts.botToken,
     groupPolicy: "allowlist",
+    ackReaction: "",  // disable flashing emoji lifecycle on Discord
     guilds: {
       [opts.serverId]: { requireMention: true },
     },
