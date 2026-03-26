@@ -167,6 +167,119 @@ Open `localhost:3000`. Log in with `admin@devsummit.mn` / `admin123`.
 | `XAI_API_KEY` | No | xAI API key |
 | `ZAI_API_KEY` | No | z.ai (ZhipuAI) API key |
 | `OLLAMA_URL` | No | Ollama URL (default: `localhost:11434`) |
+| `QUEUE_ENABLED` | No | `true` to route emails/notifications through the job queue |
+| `MAIL_DRIVER` | No | `log` (default), `mailgun`, or `postmark` |
+| `MAIL_FROM_ADDRESS` | No | Sender email (default: `noreply@example.com`) |
+| `MAIL_FROM_NAME` | No | Sender name (default: `Event OS`) |
+| `POSTMARK_SERVER_TOKEN` | Postmark only | Postmark API token |
+| `MAILGUN_API_KEY` | Mailgun only | Mailgun API key |
+| `MAILGUN_DOMAIN` | Mailgun only | Mailgun sending domain |
+
+## Job Queue & Background Workers
+
+Email sending and notifications are processed in the background via a database-backed job queue. When `QUEUE_ENABLED=true`, `mail()` and `notify()` return immediately — the actual work happens in a separate worker process with retry and exponential backoff.
+
+### Local development
+
+Run the worker alongside your dev server in a second terminal:
+
+```bash
+# Terminal 1 — Next.js dev server
+npm run dev
+
+# Terminal 2 — Queue worker
+QUEUE_ENABLED=true DB_DIALECT=sqlite npm run queue:work
+```
+
+Without the worker running, emails and notifications fall back to synchronous inline processing (no `QUEUE_ENABLED` needed).
+
+### How it works
+
+```
+API route → mail() / notify() → INSERT into jobs table → return immediately
+                                        ↓
+Queue worker (polls) → claim job → execute handler → complete / retry / fail
+```
+
+- **Adaptive polling:** 1s → 2s → 4s → ... → 10s cap when idle, resets to 1s on job found
+- **Retry with backoff:** configurable per job (emails: 3 attempts, 15s base backoff)
+- **Timeout:** per-job AbortController timeout (emails: 30s, notifications: 10s)
+- **Failed jobs:** after max retries, moved to `failed_jobs` table for inspection
+- **Graceful shutdown:** SIGTERM/SIGINT finishes the current job before exiting
+- **Stale recovery:** processing jobs stuck >5 minutes are automatically released
+
+### Worker commands
+
+```bash
+npm run queue:work                              # process high + default queues
+npm run queue:work -- --queues=high,default     # explicit queue list
+npm run queue:work -- --queues=high             # only high-priority queue
+```
+
+### Production deployment
+
+The worker is a long-running Node.js process. How you run it depends on your deployment:
+
+**Forge (DigitalOcean/AWS)**
+
+Add a Forge daemon — it auto-restarts on crash, same as Laravel's queue worker:
+
+1. Go to your Forge site → **Daemons**
+2. Command: `node_modules/.bin/tsx scripts/queue-worker.ts`
+3. Directory: `/home/forge/your-site/current`
+4. Set environment variables (same as your `.env` — `QUEUE_ENABLED`, `MAIL_DRIVER`, `POSTMARK_SERVER_TOKEN`, etc.)
+
+**Docker / docker-compose**
+
+Add a second service that runs the same image with a different entrypoint:
+
+```yaml
+services:
+  web:
+    build: .
+    command: npm start
+    env_file: .env
+
+  worker:
+    build: .
+    command: npx tsx scripts/queue-worker.ts
+    env_file: .env
+    restart: unless-stopped
+```
+
+**systemd**
+
+```ini
+[Unit]
+Description=Event OS Queue Worker
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+WorkingDirectory=/opt/event-os
+ExecStart=/usr/bin/npx tsx scripts/queue-worker.ts
+Restart=always
+RestartSec=5
+EnvironmentFile=/opt/event-os/.env
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**Vercel / serverless**
+
+Long-running workers can't run on serverless platforms. Options:
+- Use an external cron service (e.g., [cron-job.org](https://cron-job.org)) to hit an API route that processes a batch of jobs
+- Run the worker on a separate $5/mo VPS (DigitalOcean, Hetzner)
+- Skip the queue — without `QUEUE_ENABLED=true`, emails send synchronously inline
+
+### Current job types
+
+| Job | Queue | Timeout | Retries | Backoff |
+|-----|-------|---------|---------|---------|
+| `send-email` | default | 30s | 3 | 15s exponential |
+| `send-notification` | default | 10s | 3 | 5s exponential |
 
 ## Project Structure
 
@@ -215,7 +328,19 @@ src/
     auth.ts               # NextAuth config (credentials + JWT)
     rbac.ts               # requirePermission() — role + team scope checks
     checklist.ts          # generateChecklistItems() + archiveChecklistItems()
-    notify.ts             # notify() — create notifications for users
+    notify.ts             # notify() — create notifications (queue-aware)
+    mail/                 # Email system (Postmark, Mailgun, log driver)
+      index.ts            # mail() → queue dispatch, mailNow() → send + log
+      config.ts           # Env-based driver config
+      drivers/            # Postmark, Mailgun, log
+      mailables/          # Email templates (portal invite, etc.)
+      templates/          # Base HTML layout
+    queue/                # Database-backed job queue (Laravel-inspired)
+      index.ts            # dispatch(), dispatchMany(), registry, driver factory
+      types.ts            # JobDefinition, QueueDriver interfaces
+      drivers/database.ts # PG (FOR UPDATE SKIP LOCKED) + SQLite driver
+      worker.ts           # Poll loop, retry, timeout, graceful shutdown
+      jobs.ts             # send-email, send-notification
     password.ts           # bcrypt hash + compare (legacy SHA-256 compat)
     contacts.ts           # Cross-org person identity
     conflicts.ts          # Schedule conflict detection
@@ -333,13 +458,15 @@ Never commit `.env.local`. The `.env.example` file has safe placeholders only.
 - [x] Stakeholder portal (self-service checklist + profile)
 - [x] Marketing content calendar + Kanban task board
 - [x] Notifications, QR check-in, public agenda, CFP form
+- [x] Job queue — database-backed, retry with backoff, graceful shutdown, extensible driver interface
+- [x] Email system — Postmark/Mailgun/log drivers, async via queue, dedup protection, email logging
 - [x] 205 automated tests (RBAC, agent, security, checklist)
 
 ### Planned
 
 - [ ] OpenClaw integration — Telegram/Discord/WhatsApp bot with @mention gating
 - [ ] Payments — Stripe + QPay (Mongolia) via pluggable adapter
-- [ ] Email communications — scheduled broadcasts, checklist reminders
+- [ ] Email communications — scheduled broadcasts, checklist reminders, bulk campaigns
 - [ ] Cloud deployment (Vercel, Fly.io, or Railway)
 - [ ] Dashboard analytics
 - [ ] Agenda drag-and-drop editor
