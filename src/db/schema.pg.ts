@@ -55,6 +55,10 @@ export const organizations = pgTable("organizations", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   slug: varchar("slug", { length: 100 }).notNull().unique(),
+  contactEmail: varchar("contact_email", { length: 255 }),
+  website: varchar("website", { length: 500 }),
+  brandColor: varchar("brand_color", { length: 7 }),
+  logoUrl: text("logo_url"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
