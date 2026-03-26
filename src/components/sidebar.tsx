@@ -7,7 +7,7 @@ import {
   LayoutDashboard,
   Calendar,
   Mic2,
-  Building2,
+  DollarSign,
   Users,
   ScanLine,
   Settings,
@@ -44,7 +44,7 @@ const navGroups: NavGroup[] = [
   {
     label: "Partnerships",
     items: [
-      { href: "/sponsors", label: "Sponsors", icon: Building2 },
+      { href: "/sponsors", label: "Sponsors", icon: DollarSign },
       { href: "/media", label: "Media", icon: Tv },
       { href: "/venue", label: "Venues", icon: MapPin },
       { href: "/booths", label: "Booths", icon: Store },
@@ -79,7 +79,7 @@ type Edition = {
   name: string;
 };
 
-export function Sidebar({ onToggleChat }: { onToggleChat?: () => void }) {
+export function Sidebar({ onToggleChat, chatOpen }: { onToggleChat?: () => void; chatOpen?: boolean }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
@@ -178,7 +178,7 @@ export function Sidebar({ onToggleChat }: { onToggleChat?: () => void }) {
               <ChevronDown className={cn("h-3 w-3 ml-1 shrink-0 transition-transform", showEditionPicker && "rotate-180")} />
             </button>
             {showEditionPicker && (
-              <div className="absolute left-0 right-0 top-full mt-1 rounded-md border border-stone-700 bg-stone-800 py-1 z-50">
+              <div className="absolute left-0 right-0 top-full mt-1 rounded-md border border-stone-700 bg-stone-800 py-1 z-50 dropdown-active">
                 {editions.map((ed) => (
                   <button
                     key={ed.id}
@@ -260,10 +260,16 @@ export function Sidebar({ onToggleChat }: { onToggleChat?: () => void }) {
         {onToggleChat && (
           <button
             onClick={onToggleChat}
-            className="flex w-full items-center gap-2.5 rounded-md px-3 py-1.5 text-sm text-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/20 transition-colors"
+            className={cn(
+              "flex w-full items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-colors",
+              chatOpen
+                ? "text-yellow-500 bg-yellow-500/15 font-medium"
+                : "text-stone-400 hover:bg-white/5 hover:text-white"
+            )}
           >
             <MessageSquare className="h-4 w-4 shrink-0" />
-            <span className="font-medium">Agent</span>
+            <span>Agent</span>
+            <kbd className="ml-auto hidden lg:inline-flex text-[9px] text-stone-500 border border-stone-700 rounded px-1">⌘K</kbd>
           </button>
         )}
 
@@ -316,7 +322,7 @@ export function Sidebar({ onToggleChat }: { onToggleChat?: () => void }) {
           <Bell className="h-4 w-4 shrink-0" />
           <span>Notifications</span>
           {unreadCount > 0 && (
-            <span className="absolute left-7 top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+            <span className="absolute right-2 top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
               {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           )}

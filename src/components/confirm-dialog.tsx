@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback, createContext, useContext } from "react";
+import { useState, useCallback, useEffect, useRef, createContext, useContext } from "react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 type ConfirmOptions = {
   title: string;
@@ -28,6 +29,8 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     options: ConfirmOptions;
     resolve: (value: boolean) => void;
   } | null>(null);
+  const [visible, setVisible] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   const confirm = useCallback((options: ConfirmOptions): Promise<boolean> => {
     return new Promise((resolve) => {
@@ -35,18 +38,47 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // Animate in when state is set
+  useEffect(() => {
+    if (state) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setVisible(true));
+      });
+    }
+  }, [state]);
+
   const handleClose = (result: boolean) => {
-    state?.resolve(result);
-    setState(null);
+    if (!visible) return;
+    setVisible(false);
+    timeoutRef.current = setTimeout(() => {
+      state?.resolve(result);
+      setState(null);
+    }, 150);
   };
+
+  useEffect(() => {
+    return () => clearTimeout(timeoutRef.current);
+  }, []);
 
   return (
     <ConfirmContext.Provider value={{ confirm }}>
       {children}
       {state && (
         <>
-          <div className="fixed inset-0 z-[60] bg-black/50" onClick={() => handleClose(false)} />
-          <div className="fixed left-1/2 top-1/2 z-[61] w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-white p-6 shadow-xl">
+          <div
+            className={cn(
+              "fixed inset-0 z-[60]",
+              "bg-black/50",
+              visible ? "backdrop-active" : "backdrop-enter"
+            )}
+            onClick={() => handleClose(false)}
+          />
+          <div
+            className={cn(
+              "fixed left-1/2 top-1/2 z-[61] w-full max-w-sm rounded-lg border bg-white p-6 shadow-xl",
+              visible ? "dialog-active" : "dialog-enter"
+            )}
+          >
             <h3 className="font-medium text-sm mb-1">{state.options.title}</h3>
             <p className="text-sm text-muted-foreground mb-4">{state.options.message}</p>
             <div className="flex justify-end gap-2">

@@ -45,8 +45,19 @@ export default function DashboardLayout({
 
   if (!checked) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground text-sm">Loading...</div>
+      <div className="min-h-screen bg-background">
+        <aside className="fixed inset-y-0 left-0 hidden lg:flex w-56 flex-col bg-stone-900" />
+        <main className="min-h-screen lg:ml-56">
+          <div className="mx-auto max-w-6xl px-4 py-4 lg:px-6 lg:py-6 space-y-4">
+            <div className="h-8 w-48 animate-pulse rounded bg-muted" />
+            <div className="h-4 w-32 animate-pulse rounded bg-muted" />
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-20 animate-pulse rounded-xl bg-muted" />
+              ))}
+            </div>
+          </div>
+        </main>
       </div>
     );
   }
@@ -54,7 +65,7 @@ export default function DashboardLayout({
   return (
     <ConfirmProvider>
     <div className="min-h-screen bg-background">
-      <Sidebar onToggleChat={toggleChat} />
+      <Sidebar onToggleChat={toggleChat} chatOpen={chatOpen} />
       <main
         className={`min-h-screen pt-14 pb-16 lg:pt-0 lg:pb-0 lg:ml-56 transition-all duration-200 ${
           chatOpen ? "lg:mr-[400px]" : ""

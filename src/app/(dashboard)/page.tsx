@@ -20,7 +20,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 mb-8">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 mb-6">
         {[
           { label: "Sessions", value: stats.sessions, icon: Calendar },
           { label: "Speakers", value: stats.speakers, icon: Mic2 },

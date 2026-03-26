@@ -153,7 +153,7 @@ export function InvitationsClient({ initialInvitations }: { initialInvitations: 
                 <Label>Notes</Label>
                 <Textarea name="notes" placeholder="Any notes about this invitation..." rows={2} />
               </div>
-              <Button type="submit" className="w-full sm:w-auto">Create Invitation</Button>
+              <Button type="submit" className="w-full sm:w-auto">Add Invitation</Button>
             </form>
           </CardContent>
         </Card>

@@ -155,7 +155,7 @@ export function OutreachClient({ initialOutreach }: { initialOutreach: OutreachR
                 <Label>Notes</Label>
                 <Textarea name="notes" placeholder="Any notes about this lead..." rows={2} />
               </div>
-              <Button type="submit" className="w-full sm:w-auto">Create Lead</Button>
+              <Button type="submit" className="w-full sm:w-auto">Add Lead</Button>
             </form>
           </CardContent>
         </Card>

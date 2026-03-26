@@ -115,7 +115,7 @@ export function MarketingClient({ initialCampaigns }: { initialCampaigns: Campai
           </p>
         </div>
         <Button size="sm" onClick={() => { setCreateDate(""); setShowCreate(true); }}>
-          <Plus className="mr-2 h-3 w-3" /> New Item
+          <Plus className="mr-2 h-3 w-3" /> Add Campaign
         </Button>
       </div>
 

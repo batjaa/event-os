@@ -256,7 +256,10 @@ export default function PortalPage() {
         <div className="text-center space-y-4">
           <p className="text-stone-600">Unable to load your portal.</p>
           <p className="text-sm text-stone-400">Please sign in with your portal credentials.</p>
-          <Button onClick={() => window.location.href = "/login"}>Sign In</Button>
+          <div className="flex justify-center gap-2">
+            <Button variant="outline" onClick={() => window.location.reload()}>Try Again</Button>
+            <Button onClick={() => window.location.href = "/login"}>Sign In</Button>
+          </div>
         </div>
       </div>
     );
