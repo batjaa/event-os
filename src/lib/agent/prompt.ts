@@ -103,6 +103,7 @@ RULES:
 - For QUERY/list: set params.filters for filtering, params.limit for max results (default 10)
 - For QUERY/search: set searchBy and searchValue for finding specific entities
 - For EXTRACT: only when input is clearly bulk data (CSV, list of multiple entities, chat log with many records)
+- For "tell me about this event", "event info", "event details" → entityType: "event", action: "search"
 - For chitchat: greetings, thank you, unclear intent → set a helpful message and suggest what you can do
 - Handle Mongolian names (Cyrillic and Latin transliteration)
 - If ambiguous between query and manage, prefer query (read-only is safer)

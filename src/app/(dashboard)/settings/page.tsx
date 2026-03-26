@@ -342,7 +342,7 @@ export default function SettingsPage() {
     { key: "event", label: "Event" },
     { key: "team", label: "Team" },
     { key: "checklists", label: "Checklists" },
-    { key: "telegram", label: "Telegram" },
+    { key: "telegram", label: "Messaging" },
   ];
 
   return (
@@ -573,22 +573,248 @@ export default function SettingsPage() {
         <ChecklistTemplatesTab />
       )}
 
-      {/* Telegram tab */}
-      {tab === "telegram" && (
-        <div className="max-w-lg space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Connect your Telegram group to receive agent notifications for
-            speaker applications, deadline reminders, and conflict alerts.
+      {/* Messaging tab */}
+      {tab === "telegram" && <TelegramSetup />}
+    </div>
+  );
+}
+
+// ─── Telegram Setup Component ─────────────────────────
+
+function TelegramSetup() {
+  const [step, setStep] = useState<"idle" | "token" | "group" | "connected">("idle");
+  const [token, setToken] = useState("");
+  const [botInfo, setBotInfo] = useState<{ botUsername: string; botName: string } | null>(null);
+  const [groups, setGroups] = useState<{ chatId: string; title: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [config, setConfig] = useState<{ botUsername?: string; groupChatId?: string; groupTitle?: string; enabled?: boolean } | null>(null);
+  const [openclaw, setOpenclaw] = useState<{ installed?: boolean; gatewayRunning?: boolean; telegramConnected?: boolean } | null>(null);
+
+  // Load existing config + OpenClaw status
+  useEffect(() => {
+    fetch("/api/messaging/telegram").then(async (res) => {
+      const json = await res.json();
+      if (json.data) {
+        setConfig(json.data);
+        setStep(json.data.enabled ? "connected" : json.data.botUsername ? "group" : "idle");
+      }
+      if (json.openclaw) setOpenclaw(json.openclaw);
+    }).catch(() => {});
+  }, []);
+
+  const validateToken = async () => {
+    setLoading(true);
+    setError("");
+    const res = await fetch("/api/messaging/telegram", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "validate", botToken: token }),
+    });
+    const json = await res.json();
+    setLoading(false);
+    if (!res.ok) {
+      setError(json.error || "Invalid token");
+      return;
+    }
+    setBotInfo(json.data);
+    setStep("group");
+  };
+
+  const detectGroups = async () => {
+    setLoading(true);
+    setError("");
+    const res = await fetch("/api/messaging/telegram", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "detect-group" }),
+    });
+    const json = await res.json();
+    setLoading(false);
+    if (!res.ok) {
+      setError(json.error || "Detection failed");
+      return;
+    }
+    setGroups(json.data.groups || []);
+    if (json.data.groups?.length === 0) {
+      setError(json.message || "No groups found. Add the bot to a group and send a message first.");
+    }
+  };
+
+  const connectGroup = async (chatId: string, title: string) => {
+    setLoading(true);
+    const res = await fetch("/api/messaging/telegram", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "connect", groupChatId: chatId, groupTitle: title }),
+    });
+    setLoading(false);
+    if (res.ok) {
+      setConfig({ botUsername: botInfo?.botUsername || config?.botUsername, groupTitle: title, enabled: true });
+      setStep("connected");
+    }
+  };
+
+  const disconnect = async () => {
+    await fetch("/api/messaging/telegram", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "disconnect" }),
+    });
+    setConfig(null);
+    setStep("idle");
+    setToken("");
+    setBotInfo(null);
+    setGroups([]);
+  };
+
+  // Connected state
+  if (step === "connected" && config) {
+    return (
+      <div className="max-w-lg space-y-4">
+        <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-900 p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-green-500" />
+            <h4 className="text-sm font-medium">Telegram Connected</h4>
+          </div>
+          <div className="text-sm text-muted-foreground space-y-1">
+            <p>Bot: <span className="font-medium">@{config.botUsername}</span></p>
+            {config.groupTitle && <p>Group: <span className="font-medium">{config.groupTitle}</span></p>}
+          </div>
+        </div>
+        {openclaw && (
+          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <span className={`w-1.5 h-1.5 rounded-full ${openclaw.installed ? "bg-green-500" : "bg-red-500"}`} />
+              OpenClaw {openclaw.installed ? "installed" : "not installed"}
+            </span>
+            <span className="flex items-center gap-1">
+              <span className={`w-1.5 h-1.5 rounded-full ${openclaw.gatewayRunning ? "bg-green-500" : "bg-yellow-500"}`} />
+              Gateway {openclaw.gatewayRunning ? "running" : "stopped"}
+            </span>
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground">
+          Team members can @mention the bot in the group to query event data,
+          create records, and manage the event. Multi-turn conversations, scheduling,
+          and context memory are powered by OpenClaw.
+        </p>
+        <div className="flex gap-2">
+          {openclaw && !openclaw.gatewayRunning && (
+            <Button size="sm" onClick={async () => {
+              setLoading(true);
+              await fetch("/api/messaging/telegram", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "connect", groupChatId: config?.groupChatId || "", groupTitle: config?.groupTitle }),
+              });
+              setLoading(false);
+              // Refresh status
+              const res = await fetch("/api/messaging/telegram");
+              const json = await res.json();
+              if (json.openclaw) setOpenclaw(json.openclaw);
+            }}>
+              {loading ? "Starting..." : "Start Gateway"}
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={disconnect}>Disconnect</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-lg space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Connect a Telegram bot to your team group chat. The bot can answer questions,
+        create records, and manage your event through natural conversation.
+      </p>
+
+      {/* Step 1: Bot token */}
+      <div className="rounded-lg border p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className={`w-5 h-5 rounded-full text-xs flex items-center justify-center font-medium ${botInfo || step === "group" ? "bg-green-500 text-white" : "bg-muted text-muted-foreground"}`}>1</span>
+          <h4 className="text-sm font-medium">Create a bot</h4>
+        </div>
+        {step === "idle" || step === "token" ? (
+          <div className="space-y-2 pl-7">
+            <p className="text-xs text-muted-foreground">
+              Open Telegram, message <span className="font-medium">@BotFather</span>, send <code className="bg-muted px-1 rounded">/newbot</code>, and paste the token below.
+            </p>
+            <div className="flex gap-2">
+              <Input
+                type="password"
+                placeholder="Paste bot token..."
+                value={token}
+                onChange={(e) => { setToken(e.target.value); setError(""); }}
+              />
+              <Button size="sm" disabled={!token.includes(":") || loading} onClick={validateToken}>
+                {loading ? "Checking..." : "Verify"}
+              </Button>
+            </div>
+            {error && <p className="text-xs text-destructive">{error}</p>}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground pl-7">
+            Bot: <span className="font-medium">@{botInfo?.botUsername || config?.botUsername}</span>
           </p>
-          <div className="space-y-1.5">
-            <Label>Telegram Bot Token</Label>
-            <Input type="password" placeholder="Enter your bot token..." />
+        )}
+      </div>
+
+      {/* Step 2: Detect group */}
+      {(step === "group") && (
+        <div className="rounded-lg border p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className={`w-5 h-5 rounded-full text-xs flex items-center justify-center font-medium ${groups.length > 0 ? "bg-green-500 text-white" : "bg-muted text-muted-foreground"}`}>2</span>
+            <h4 className="text-sm font-medium">Connect to group chat</h4>
           </div>
-          <div className="space-y-1.5">
-            <Label>Chat ID</Label>
-            <Input placeholder="e.g., -1001234567890" />
+          <div className="space-y-3 pl-7">
+            <p className="text-xs text-muted-foreground">
+              Add <span className="font-medium">@{botInfo?.botUsername || config?.botUsername}</span> to your team group chat,
+              send any message in the group, then click Detect. If detect doesn&apos;t find your group,
+              enter the chat ID manually below.
+            </p>
+            <div className="flex gap-2">
+              <Button size="sm" disabled={loading} onClick={detectGroups}>
+                {loading ? "Detecting..." : "Detect Group"}
+              </Button>
+            </div>
+            {error && <p className="text-xs text-destructive">{error}</p>}
+            {groups.length > 0 && (
+              <div className="space-y-1">
+                {groups.map((g) => (
+                  <button
+                    key={g.chatId}
+                    className="w-full text-left px-3 py-2 rounded border hover:bg-muted text-sm flex justify-between items-center"
+                    onClick={() => connectGroup(g.chatId, g.title)}
+                  >
+                    <span>{g.title}</span>
+                    <span className="text-xs font-medium text-primary">Connect</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="border-t pt-3 space-y-2">
+              <p className="text-xs text-muted-foreground">Or enter group chat ID manually:</p>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="e.g., -1001234567890"
+                  onChange={(e) => setError("")}
+                  id="manual-group-id"
+                />
+                <Button size="sm" onClick={() => {
+                  const input = (document.getElementById("manual-group-id") as HTMLInputElement)?.value?.trim();
+                  if (input && input.startsWith("-")) {
+                    connectGroup(input, "Group chat");
+                  } else {
+                    setError("Group chat IDs start with a dash (e.g., -1001234567890)");
+                  }
+                }}>
+                  Connect
+                </Button>
+              </div>
+            </div>
           </div>
-          <Button variant="outline">Connect Telegram</Button>
         </div>
       )}
     </div>

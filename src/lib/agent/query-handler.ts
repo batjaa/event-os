@@ -77,6 +77,12 @@ export async function handleQuery(
   ctx: AgentContext
 ): Promise<DispatchResult> {
   const entityType = intent.entityType;
+
+  // "Tell me about this event" / event info queries
+  if (entityType === "event" as any || (!entityType && intent.action === "search")) {
+    return handleEventInfo(ctx);
+  }
+
   if (!entityType || !TABLE_MAP[entityType]) {
     return {
       message: `I can query: speakers, sponsors, venues, booths, volunteers, media partners, tasks, campaigns, attendees. Which one?`,
@@ -312,6 +318,48 @@ async function handleSearch(
     message: `Found ${rows.length} ${pluralLabel} matching "${searchValue}":\n${items.join("\n")}`,
     success: true,
     data: { items: rows.map((r: any) => stripSensitiveFields(r)) },
+  };
+}
+
+// ─── EVENT INFO ──────────────────────────────────────
+
+async function handleEventInfo(ctx: AgentContext): Promise<DispatchResult> {
+  // Get edition details
+  const edition = await db.query.eventEditions.findFirst({
+    where: eq(schema.eventEditions.id, ctx.editionId),
+  });
+
+  if (!edition) {
+    return { message: "No event found.", success: false };
+  }
+
+  // Get summary counts
+  const counts = await Promise.all([
+    db.select({ c: sql<number>`count(*)` }).from(schema.speakerApplications).where(eq(schema.speakerApplications.editionId, ctx.editionId)),
+    db.select({ c: sql<number>`count(*)` }).from(schema.sponsorApplications).where(eq(schema.sponsorApplications.editionId, ctx.editionId)),
+    db.select({ c: sql<number>`count(*)` }).from(schema.volunteerApplications).where(eq(schema.volunteerApplications.editionId, ctx.editionId)),
+    db.select({ c: sql<number>`count(*)` }).from(schema.booths).where(eq(schema.booths.editionId, ctx.editionId)),
+    db.select({ c: sql<number>`count(*)` }).from(schema.tasks).where(eq(schema.tasks.editionId, ctx.editionId)),
+  ]);
+
+  const [speakers, sponsors, volunteers, booths, tasks] = counts.map((r) => Number(r[0]?.c || 0));
+
+  const startDate = edition.startDate ? new Date(edition.startDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "TBD";
+  const endDate = edition.endDate ? new Date(edition.endDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "TBD";
+
+  const lines = [
+    `**${edition.name}**`,
+    `Dates: ${startDate} — ${endDate}`,
+    edition.venue ? `Venue: ${edition.venue}` : null,
+    `Status: ${edition.status} | CFP: ${edition.cfpOpen ? "open" : "closed"}`,
+    "",
+    `Speakers: ${speakers} | Sponsors: ${sponsors} | Volunteers: ${volunteers}`,
+    `Booths: ${booths} | Tasks: ${tasks}`,
+  ].filter(Boolean);
+
+  return {
+    message: lines.join("\n"),
+    success: true,
   };
 }
 

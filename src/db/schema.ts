@@ -847,6 +847,29 @@ export const userOrganizations = pgTable(
   ]
 );
 
+// ─── Messaging Channel Config (per-org) ─────────────────
+
+export const messagingChannels = pgTable(
+  "messaging_channels",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    platform: varchar("platform", { length: 50 }).notNull(), // telegram | discord | whatsapp
+    botToken: text("bot_token"),         // encrypted in prod, plaintext for now
+    groupChatId: varchar("group_chat_id", { length: 100 }),
+    groupTitle: varchar("group_title", { length: 255 }),
+    botUsername: varchar("bot_username", { length: 255 }),
+    enabled: boolean("enabled").default(false).notNull(),
+    connectedAt: timestamp("connected_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("messaging_channel_uniq").on(table.organizationId, table.platform),
+  ]
+);
+
 // ─── User ↔ Platform Links (OpenClaw identity mapping) ──
 
 export const userPlatformLinks = pgTable(
