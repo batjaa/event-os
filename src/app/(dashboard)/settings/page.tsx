@@ -582,7 +582,7 @@ export default function SettingsPage() {
 // ─── Telegram Setup Component ─────────────────────────
 
 function TelegramSetup() {
-  const [step, setStep] = useState<"idle" | "token" | "group" | "connected">("idle");
+  const [step, setStep] = useState<"loading" | "idle" | "token" | "group" | "connected">("loading");
   const [token, setToken] = useState("");
   const [botInfo, setBotInfo] = useState<{ botUsername: string; botName: string } | null>(null);
   const [groups, setGroups] = useState<{ chatId: string; title: string }[]>([]);
@@ -598,9 +598,11 @@ function TelegramSetup() {
       if (json.data) {
         setConfig(json.data);
         setStep(json.data.enabled ? "connected" : json.data.botUsername ? "group" : "idle");
+      } else {
+        setStep("idle");
       }
       if (json.openclaw) setOpenclaw(json.openclaw);
-    }).catch(() => {});
+    }).catch(() => setStep("idle"));
   }, []);
 
   const validateToken = async () => {
@@ -667,6 +669,13 @@ function TelegramSetup() {
     setBotInfo(null);
     setGroups([]);
   };
+
+  // Loading state — prevents flash of empty form
+  if (step === "loading") {
+    return (
+      <div className="max-w-lg py-8 text-sm text-muted-foreground">Loading messaging config...</div>
+    );
+  }
 
   // Connected state
   if (step === "connected" && config) {

@@ -28,12 +28,30 @@ export async function GET(req: NextRequest) {
       id: channel.id,
       botUsername: channel.botUsername,
       groupChatId: channel.groupChatId,
-      groupTitle: channel.groupTitle,
+      groupTitle: await refreshGroupTitle(channel),
       enabled: channel.enabled,
       connectedAt: channel.connectedAt,
     },
     openclaw: openclawStatus,
   });
+}
+
+// Refresh group title from Telegram API (non-blocking, uses cached on failure)
+async function refreshGroupTitle(channel: { id: string; botToken: string | null; groupChatId: string | null; groupTitle: string | null }): Promise<string | null> {
+  if (!channel.botToken || !channel.groupChatId) return channel.groupTitle;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${channel.botToken}/getChat?chat_id=${channel.groupChatId}`);
+    const data = await res.json();
+    if (data.ok && data.result?.title && data.result.title !== channel.groupTitle) {
+      // Update DB with fresh title (fire-and-forget)
+      db.update(messagingChannels)
+        .set({ groupTitle: data.result.title })
+        .where(eq(messagingChannels.id, channel.id))
+        .catch(() => {});
+      return data.result.title;
+    }
+  } catch {}
+  return channel.groupTitle;
 }
 
 // POST — validate, detect, connect, disconnect
