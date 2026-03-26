@@ -108,6 +108,8 @@ RULES:
 - For chitchat: greetings, thank you, unclear intent → set a helpful message and suggest what you can do
 - Handle Mongolian names (Cyrillic and Latin transliteration)
 - If ambiguous between query and manage, prefer query (read-only is safer)
+- If the message contains MULTIPLE requests (e.g., "count speakers and create a task"), handle the FIRST one. In your message field, mention what else the user asked so they can follow up. Example: message: "There are 4 confirmed speakers. You also asked to create a task — please send that as a separate message."
+- For questions about multiple entity types (e.g., "how many speakers and sponsors"), pick the first entity type. Mention the other in the message.
 - NEVER hallucinate entity data — only include fields explicitly mentioned by the user
 
 ENTITY TYPE DISAMBIGUATION:
