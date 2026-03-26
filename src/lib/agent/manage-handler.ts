@@ -90,6 +90,47 @@ function safeDefault(fieldName: string, entityType: string, values: Record<strin
   return "";
 }
 
+// ─── Stage/status value validation ────────────────────
+//
+// The LLM often confuses stage and status (e.g. sets status="confirmed"
+// when it should be stage="confirmed"). This layer auto-corrects
+// misclassified values before they hit the DB and cause enum errors.
+
+const STAGE_VALUES = new Set(["lead", "engaged", "confirmed", "declined"]);
+const STATUS_VALUES: Record<string, Set<string>> = {
+  speaker: new Set(["pending", "accepted", "rejected", "waitlisted"]),
+  task: new Set(["todo", "in_progress", "done", "blocked"]),
+  campaign: new Set(["draft", "scheduled", "published", "cancelled"]),
+};
+
+function fixStageStatusConfusion(values: Record<string, unknown>, entityType: string): void {
+  const statusSet = STATUS_VALUES[entityType];
+
+  // If status has a stage value, move it to stage
+  if (values.status && STAGE_VALUES.has(values.status as string)) {
+    if (!values.stage) {
+      values.stage = values.status;
+    }
+    delete values.status;
+  }
+
+  // If stage has a status value, move it to status
+  if (values.stage && statusSet?.has(values.stage as string)) {
+    if (!values.status) {
+      values.status = values.stage;
+    }
+    delete values.stage;
+  }
+
+  // Remove invalid enum values entirely rather than crashing
+  if (values.status && statusSet && !statusSet.has(values.status as string)) {
+    delete values.status;
+  }
+  if (values.stage && !STAGE_VALUES.has(values.stage as string)) {
+    delete values.stage;
+  }
+}
+
 // Field aliases — maps LLM terms to actual DB column names
 const FIELD_ALIASES: Record<string, string> = {
   company: "companyName", "company_name": "companyName",
@@ -177,6 +218,9 @@ async function handleCreate(
       values[field] = safeDefault(field, intent.entityType!, values);
     }
   }
+
+  // Fix stage/status confusion (e.g. status="confirmed" → stage="confirmed")
+  fixStageStatusConfusion(values, intent.entityType!);
 
   // Truncate string values to avoid DB varchar overflow (text fields exempt)
   const TEXT_FIELDS = new Set(["bio", "content", "description", "talkAbstract", "notes", "message", "experience", "availability", "requirements", "requirementsNotes"]);
@@ -274,6 +318,9 @@ async function applyUpdate(
       updates[key] = value;
     }
   }
+
+  // Fix stage/status confusion before checking if empty
+  fixStageStatusConfusion(updates, intent.entityType!);
 
   if (Object.keys(updates).length === 0) {
     return { message: `What do you want to change about **${entity[nameField]}**?`, success: false };

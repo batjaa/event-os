@@ -47,7 +47,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Rate limited. Please wait a moment." }, { status: 429 });
     }
 
-    // Re-attach body for downstream processing (req.json() can only be called once)
+    // Service token calls come from OpenClaw which already handled user routing.
+    // Override source to "api" so @mention gating is skipped.
+    body.source = "api";
+
     return handleRequest(req, body, userId, orgId, role, userName);
   }
 

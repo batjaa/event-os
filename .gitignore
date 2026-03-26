@@ -49,3 +49,10 @@ next-env.d.ts
 .gstack/
 .claude/worktrees
 public/uploads/
+
+# OpenClaw — only SKILL.md is safe to commit, never config/env/tokens
+openclaw/.env
+openclaw/*.json
+openclaw/*.json5
+openclaw/*.yaml
+openclaw/*.yml
