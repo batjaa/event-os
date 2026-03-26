@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { notifications } from "@/db/schema";
 
-type NotifyParams = {
+export type NotifyParams = {
   userId: string;
   orgId: string;
   type: string;
@@ -17,11 +17,20 @@ type NotifyParams = {
  * Create a notification for a user.
  * Call this from any API route or handler — it's a simple DB insert.
  * Never throws — logs errors and returns silently.
+ *
+ * When QUEUE_ENABLED=true, dispatches to the job queue instead
+ * of inserting directly. Same signature, same fire-and-forget semantics.
  */
 export async function notify(params: NotifyParams): Promise<void> {
   try {
-    // Don't notify yourself
-    // (caller should check this if needed — we don't have actor ID here)
+    if (process.env.QUEUE_ENABLED === "true") {
+      const { dispatch, sendNotificationJob } = await import("@/lib/queue");
+      await dispatch(sendNotificationJob, params, {
+        organizationId: params.orgId,
+      });
+      return;
+    }
+
     await db.insert(notifications).values({
       userId: params.userId,
       organizationId: params.orgId,
@@ -40,9 +49,33 @@ export async function notify(params: NotifyParams): Promise<void> {
 
 /**
  * Notify multiple users at once.
+ *
+ * When QUEUE_ENABLED=true, uses dispatchMany() for a single
+ * bulk INSERT instead of N individual inserts.
  */
-export async function notifyMany(userIds: string[], params: Omit<NotifyParams, "userId">): Promise<void> {
-  for (const userId of userIds) {
-    await notify({ ...params, userId });
+export async function notifyMany(
+  userIds: string[],
+  params: Omit<NotifyParams, "userId">
+): Promise<void> {
+  try {
+    if (process.env.QUEUE_ENABLED === "true") {
+      const { dispatchMany, sendNotificationJob } = await import(
+        "@/lib/queue"
+      );
+      await dispatchMany(
+        sendNotificationJob,
+        userIds.map((userId) => ({
+          payload: { ...params, userId },
+          organizationId: params.orgId,
+        }))
+      );
+      return;
+    }
+
+    for (const userId of userIds) {
+      await notify({ ...params, userId });
+    }
+  } catch (error) {
+    console.error("Failed to create notifications:", error);
   }
 }

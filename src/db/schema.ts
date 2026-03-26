@@ -19,6 +19,7 @@ export const sessionTypeEnum = pg.sessionTypeEnum;
 export const editionStatusEnum = pg.editionStatusEnum;
 export const agendaStatusEnum = pg.agendaStatusEnum;
 export const queueStatusEnum = pg.queueStatusEnum;
+export const jobStatusEnum = pg.jobStatusEnum;
 
 // ─── Tables ─────────────────────────────────────────────────
 export const organizations = s.organizations as typeof pg.organizations;
@@ -54,6 +55,8 @@ export const userPlatformLinks = s.userPlatformLinks as typeof pg.userPlatformLi
 export const messagingChannels = s.messagingChannels as typeof pg.messagingChannels;
 export const authSessions = s.authSessions as typeof pg.authSessions;
 export const accounts = s.accounts as typeof pg.accounts;
+export const jobs = s.jobs as typeof pg.jobs;
+export const failedJobs = s.failedJobs as typeof pg.failedJobs;
 
 // ─── Relations ──────────────────────────────────────────────
 export const organizationsRelations = s.organizationsRelations;

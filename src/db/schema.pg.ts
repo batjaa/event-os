@@ -945,6 +945,59 @@ export const accounts = pgTable("accounts", {
   sessionState: varchar("session_state", { length: 255 }),
 });
 
+// ─── Job Queue ──────────────────────────────────────────
+//
+//  Job lifecycle:
+//    dispatch() → pending → pop() → processing → handle()
+//                   ▲                    │
+//                   │ fail(backoff)       ├─ success → complete() [DELETE]
+//                   └────────────────────├─ failure (retryable) → fail() → pending
+//                                        └─ failure (final) → bury() → failed_jobs
+//
+
+export const jobStatusEnum = pgEnum("job_status", ["pending", "processing"]);
+
+export const jobs = pgTable(
+  "jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 255 }).notNull(),
+    queue: varchar("queue", { length: 100 }).default("default").notNull(),
+    payload: jsonb("payload").notNull(),
+    status: jobStatusEnum("status").default("pending").notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    maxAttempts: integer("max_attempts").default(3).notNull(),
+    organizationId: uuid("organization_id"),
+    uniqueKey: varchar("unique_key", { length: 500 }),
+    lastError: text("last_error"),
+    availableAt: timestamp("available_at").defaultNow().notNull(),
+    reservedAt: timestamp("reserved_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("jobs_queue_status_available_idx").on(
+      table.queue,
+      table.status,
+      table.availableAt
+    ),
+    uniqueIndex("jobs_unique_key_idx").on(table.uniqueKey),
+  ]
+);
+
+export const failedJobs = pgTable(
+  "failed_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    jobName: varchar("job_name", { length: 255 }).notNull(),
+    queue: varchar("queue", { length: 100 }).notNull(),
+    payload: jsonb("payload").notNull(),
+    error: text("error").notNull(),
+    organizationId: uuid("organization_id"),
+    failedAt: timestamp("failed_at").defaultNow().notNull(),
+  },
+  (table) => [index("failed_jobs_name_idx").on(table.jobName)]
+);
+
 // ─── Relations ───────────────────────────────────────────
 
 export const organizationsRelations = relations(organizations, ({ many }) => ({
