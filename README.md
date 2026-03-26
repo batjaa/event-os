@@ -52,7 +52,7 @@ Supports **Gemini 2.5 Flash** (free tier, default), **xAI**, **z.ai**, **Ollama*
 | Framework | Next.js 16 (App Router) | Server components, API routes, one deploy target |
 | Language | TypeScript | Catch bugs before your users do |
 | Styling | Tailwind CSS + shadcn/ui | Fast, accessible components out of the box |
-| Database | PostgreSQL | Works with local Postgres, Supabase, Neon, or any PG provider |
+| Database | PostgreSQL or SQLite | Postgres for production; SQLite for zero-setup local dev |
 | ORM | Drizzle | Type-safe, no magic, SQL when you need it |
 | Auth | NextAuth.js (v5) | Credentials + JWT + service token for API |
 | Passwords | bcrypt (12 rounds) | Proper key stretching. Legacy SHA-256 auto-detected for migration. |
@@ -69,9 +69,13 @@ cd event-os
 npm install
 ```
 
-### 2. Set up PostgreSQL
+### 2. Set up the database
 
-**Option A: Local PostgreSQL** (simplest for development)
+**Option A: SQLite** (zero-install, fastest way to start)
+
+No setup needed — just set one environment variable and go.
+
+**Option B: Local PostgreSQL**
 
 ```bash
 # macOS
@@ -80,7 +84,7 @@ brew services start postgresql@16
 createdb event_os
 ```
 
-**Option B: Supabase** (cloud, free tier)
+**Option C: Supabase** (cloud, free tier)
 
 1. Create a project at [supabase.com](https://supabase.com)
 2. Go to **Settings → Database** and copy the connection string
@@ -94,9 +98,15 @@ cp .env.example .env.local
 Edit `.env.local`:
 
 ```bash
-# Required
-DATABASE_URL="postgresql://youruser@localhost:5432/event_os"  # or your Supabase URL
+# Pick one:
+# --- SQLite (no database server needed) ---
+DB_DIALECT="sqlite"
 AUTH_SECRET="$(openssl rand -base64 32)"
+
+# --- PostgreSQL ---
+# DB_DIALECT="postgresql"
+# DATABASE_URL="postgresql://youruser@localhost:5432/event_os"
+# AUTH_SECRET="$(openssl rand -base64 32)"
 
 # Optional — for the agent chat panel
 LLM_PROVIDER="gemini"          # gemini | xai | zai | ollama
@@ -106,10 +116,12 @@ GEMINI_API_KEY="your-key"      # free at ai.google.dev
 ### 4. Push schema and seed
 
 ```bash
-# Create all tables
-npx drizzle-kit push
+# SQLite
+DB_DIALECT=sqlite npx drizzle-kit push --config=drizzle.config.sqlite.ts
+DB_DIALECT=sqlite npx tsx src/db/seed.ts
 
-# Populate with sample data (Dev Summit 2026)
+# PostgreSQL
+npx drizzle-kit push
 npx tsx src/db/seed.ts
 ```
 
@@ -133,18 +145,20 @@ Open `localhost:3000`. Log in with `admin@devsummit.mn` / `admin123`.
 
 ### Database commands
 
-| Task | Command |
-|------|---------|
-| Push schema changes | `npx drizzle-kit push` |
-| Seed sample data | `npx tsx src/db/seed.ts` |
-| Browse DB in browser | `npx drizzle-kit studio` |
-| Reset DB (local only) | `psql -d event_os -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"` then push + seed |
+| Task | PostgreSQL | SQLite |
+|------|-----------|--------|
+| Push schema | `npx drizzle-kit push` | `DB_DIALECT=sqlite npx drizzle-kit push --config=drizzle.config.sqlite.ts` |
+| Seed data | `npx tsx src/db/seed.ts` | `DB_DIALECT=sqlite npx tsx src/db/seed.ts` |
+| Browse DB | `npx drizzle-kit studio` | `DB_DIALECT=sqlite npx drizzle-kit studio --config=drizzle.config.sqlite.ts` |
+| Reset DB | `psql -d event_os -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"` then push + seed | Delete `local.db` then push + seed |
 
 ### Environment Variables
 
 | Variable | Required | What it is |
 |----------|----------|-----------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `DB_DIALECT` | No | `postgresql` (default) or `sqlite` |
+| `DATABASE_URL` | PG only | PostgreSQL connection string |
+| `SQLITE_PATH` | No | SQLite file path (default: `local.db`) |
 | `AUTH_SECRET` | Yes | Random string — `openssl rand -base64 32` |
 | `NEXTAUTH_URL` | No | `http://localhost:3000` for dev (auto-detected) |
 | `SERVICE_TOKEN` | No | Random token for API service auth |
@@ -192,9 +206,11 @@ src/
       upload/             # File upload (authenticated)
       agent/process/      # LLM chat endpoint
   db/
-    schema.ts             # Drizzle schema (30+ tables)
-    seed.ts               # Dev Summit sample data
-    index.ts              # Database connection
+    schema.ts             # Drizzle PG schema (30+ tables) — canonical type source
+    schema.sqlite.ts      # Drizzle SQLite schema (mirrors PG)
+    dialect.ts            # DB_DIALECT env detection
+    seed.ts               # Dev Summit sample data (works with both dialects)
+    index.ts              # Dialect-aware database connection
   lib/
     auth.ts               # NextAuth config (credentials + JWT)
     rbac.ts               # requirePermission() — role + team scope checks
@@ -223,6 +239,74 @@ src/
     confirm-dialog.tsx    # Themed confirmation dialog (never use system alerts)
     ui/                   # shadcn/ui components
 ```
+
+## Testing
+
+Tests run against SQLite by default — no PostgreSQL or external services needed.
+
+### Quick start
+
+```bash
+# Set up SQLite test database
+DB_DIALECT=sqlite npx drizzle-kit push --config=drizzle.config.sqlite.ts
+DB_DIALECT=sqlite npx tsx src/db/seed.ts
+
+# Run unit + integration tests (no server needed)
+DB_DIALECT=sqlite npx vitest run tests/unit tests/integration
+
+# Run all tests including e2e (needs running server)
+DB_DIALECT=sqlite AUTH_SECRET=test-secret SERVICE_TOKEN=test-token npm run dev &
+DB_DIALECT=sqlite SERVICE_TOKEN=test-token npx vitest run
+
+# Watch mode
+DB_DIALECT=sqlite npx vitest
+```
+
+### Test structure
+
+Tests are organized by scope:
+
+```
+tests/
+  unit/           # No DB, no server — pure logic
+    schema-sync   # PG ↔ SQLite schema parity
+    rbac          # Permission logic
+  integration/    # Needs seeded DB — tests functions directly
+    checklist     # Checklist lifecycle (generate, archive, restore)
+    agent-*       # Agent dispatcher, handlers, input guards, LLM security
+  e2e/            # Needs running server — tests HTTP API
+    pipeline      # CRUD lifecycle for all entity types
+    security      # Auth enforcement, bcrypt, CSO audit regressions
+```
+
+### LLM-dependent tests
+
+Some agent tests call the real Gemini API. They auto-skip when no API key is set. To run them locally:
+
+```bash
+GEMINI_API_KEY=your-key DB_DIALECT=sqlite npx vitest run tests/integration
+```
+
+### CI (GitHub Actions)
+
+Tests run automatically on push to `main` and on pull requests. The workflow uses SQLite so no database service is needed.
+
+**Two jobs:**
+- **Unit & Integration** — fast (~2s), runs `tests/unit` + `tests/integration`
+- **E2E** — builds the app, starts the production server, runs `tests/e2e`
+
+**To enable LLM tests in CI**, add your Gemini API key as a repository secret:
+
+```bash
+# Via GitHub CLI
+gh secret set GEMINI_API_KEY --repo your-org/event-os
+
+# Or go to: Settings → Secrets and variables → Actions → New repository secret
+# Name: GEMINI_API_KEY
+# Value: your-gemini-api-key
+```
+
+Without the secret, LLM tests are skipped — all other tests still run and pass.
 
 ## Security
 
@@ -262,7 +346,7 @@ Never commit `.env.local`. The `.env.example` file has safe placeholders only.
 
 ## Key Design Decisions
 
-**Why PostgreSQL directly, not just Supabase?** Supabase is great for cloud, but we don't want to lock contributors into a specific provider. Local Postgres for dev, Supabase/Neon/RDS for prod — your choice.
+**Why both PostgreSQL and SQLite?** PostgreSQL for production and teams. SQLite for contributors who want to clone and run in under a minute with zero infrastructure. Both schemas are kept in sync by an automated test. SQLite is single-writer, so it's not suitable for high-concurrency production — use Postgres there.
 
 **Why a unified pipeline model?** Every entity type (speaker, sponsor, venue, booth, volunteer, media) uses the same `source` (intake/outreach/sponsored) + `stage` (lead/engaged/confirmed/declined) columns. One reusable `PipelineTable` component, one `requirePermission` middleware, one mental model.
 

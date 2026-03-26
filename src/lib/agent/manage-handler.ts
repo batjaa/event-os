@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import * as schema from "@/db/schema";
-import { eq, and, ilike, sql, getTableColumns } from "drizzle-orm";
+import { eq, and, sql, getTableColumns } from "drizzle-orm";
+import { ilikeFn as ilike } from "@/db/dialect";
 import { AgentIntent, DispatchResult } from "./types";
 import { AgentContext } from "./dispatcher";
 import { notify } from "@/lib/notify";
