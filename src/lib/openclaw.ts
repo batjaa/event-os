@@ -216,6 +216,75 @@ export function addTelegramGroup(groupChatId: string) {
   writeConfig(config);
 }
 
+// ─── Configure Discord ────────────────────────────────
+
+export function configureDiscord(opts: {
+  botToken: string;
+  botUsername: string;
+  serverId: string;
+  serviceToken: string;
+  orgId: string;
+  geminiApiKey?: string;
+  eventOsUrl?: string;
+}) {
+  const config = readConfig();
+
+  // Gateway mode
+  if (!config.gateway) config.gateway = {};
+  config.gateway.mode = "local";
+  config.gateway.bind = "loopback";
+
+  // Configure Discord channel
+  if (!config.channels) config.channels = {};
+  config.channels.discord = {
+    enabled: true,
+    token: opts.botToken,
+    groupPolicy: "allowlist",
+    guilds: {
+      [opts.serverId]: { requireMention: true },
+    },
+  };
+
+  // Configure skill env vars (shared with Telegram)
+  if (!config.skills) config.skills = {};
+  if (!config.skills.entries) config.skills.entries = {};
+  config.skills.entries["event-os"] = {
+    enabled: true,
+    env: {
+      EVENT_OS_URL: opts.eventOsUrl || "http://localhost:3000",
+      EVENT_OS_TOKEN: opts.serviceToken,
+      EVENT_OS_ORG_ID: opts.orgId,
+    },
+  };
+
+  writeConfig(config);
+
+  // Ensure skill + workspace files exist
+  ensureSkillFiles();
+
+  // Set DISCORD_BOT_TOKEN env for the gateway
+  if (opts.botToken) {
+    try {
+      const plistPath = path.join(homedir(), "Library/LaunchAgents/ai.openclaw.gateway.plist");
+      if (existsSync(plistPath)) {
+        execSync(`/usr/libexec/PlistBuddy -c "Set :EnvironmentVariables:DISCORD_BOT_TOKEN ${opts.botToken}" "${plistPath}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :EnvironmentVariables:DISCORD_BOT_TOKEN string ${opts.botToken}" "${plistPath}"`, { stdio: "pipe" });
+      }
+    } catch {}
+  }
+}
+
+// ─── Shared: ensure skill + workspace files ───────────
+
+function ensureSkillFiles() {
+  const skillDir = path.join(OPENCLAW_DIR, "skills", "event-os");
+  if (!existsSync(skillDir)) mkdirSync(skillDir, { recursive: true });
+
+  const repoSkill = path.join(process.cwd(), "openclaw", "SKILL.md");
+  if (existsSync(repoSkill)) {
+    writeFileSync(path.join(skillDir, "SKILL.md"), readFileSync(repoSkill, "utf-8"));
+  }
+}
+
 // ─── Gateway control ──────────────────────────────────
 
 // OpenClaw needs Node 22+ to run. Ensure the right PATH when calling it.

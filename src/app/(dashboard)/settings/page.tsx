@@ -574,7 +574,233 @@ export default function SettingsPage() {
       )}
 
       {/* Messaging tab */}
-      {tab === "telegram" && <TelegramSetup />}
+      {tab === "telegram" && <MessagingTab />}
+    </div>
+  );
+}
+
+// ─── Messaging Tab — Multi-platform ───────────────────
+
+function MessagingTab() {
+  const [activePlatform, setActivePlatform] = useState<"telegram" | "discord" | null>("telegram");
+
+  return (
+    <div className="space-y-6">
+      <p className="text-sm text-muted-foreground">
+        Connect your team&apos;s chat to Event OS. The bot joins your group and responds
+        when @mentioned — query data, create records, manage your event through conversation.
+      </p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Telegram card */}
+        <button
+          onClick={() => setActivePlatform(activePlatform === "telegram" ? null : "telegram")}
+          className={`text-left rounded-lg border p-4 transition-colors ${activePlatform === "telegram" ? "border-primary bg-primary/5" : "hover:border-muted-foreground/30"}`}
+        >
+          <div className="flex items-center gap-3">
+            <img src="/telegram-logo.png" alt="Telegram" className="w-10 h-10 rounded-lg" />
+            <div>
+              <h4 className="text-sm font-medium">Telegram</h4>
+              <p className="text-xs text-muted-foreground">Group chat with @mention</p>
+            </div>
+          </div>
+        </button>
+
+        {/* Discord card */}
+        <button
+          onClick={() => setActivePlatform(activePlatform === "discord" ? null : "discord")}
+          className={`text-left rounded-lg border p-4 transition-colors ${activePlatform === "discord" ? "border-primary bg-primary/5" : "hover:border-muted-foreground/30"}`}
+        >
+          <div className="flex items-center gap-3">
+            <img src="/discord-logo.png" alt="Discord" className="w-10 h-10 rounded-lg" />
+            <div>
+              <h4 className="text-sm font-medium">Discord</h4>
+              <p className="text-xs text-muted-foreground">Server channels + DMs</p>
+            </div>
+          </div>
+        </button>
+      </div>
+
+      {activePlatform === "telegram" && <TelegramSetup />}
+      {activePlatform === "discord" && <DiscordSetup />}
+    </div>
+  );
+}
+
+// ─── Discord Setup Component ──────────────────────────
+
+function DiscordSetup() {
+  const [step, setStep] = useState<"loading" | "idle" | "token" | "server" | "connected">("loading");
+  const [token, setToken] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [botInfo, setBotInfo] = useState<{ username: string; id: string } | null>(null);
+  const [config, setConfig] = useState<{ botUsername?: string; serverId?: string; serverName?: string; enabled?: boolean } | null>(null);
+  const [openclaw, setOpenclaw] = useState<{ installed?: boolean; gatewayRunning?: boolean } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/messaging/discord").then(async (res) => {
+      const json = await res.json();
+      if (json.data) {
+        setConfig(json.data);
+        setStep(json.data.enabled ? "connected" : json.data.botUsername ? "server" : "idle");
+      } else {
+        setStep("idle");
+      }
+      if (json.openclaw) setOpenclaw(json.openclaw);
+    }).catch(() => setStep("idle"));
+  }, []);
+
+  const validateToken = async () => {
+    setLoading(true);
+    setError("");
+    const res = await fetch("/api/messaging/discord", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "validate", botToken: token }),
+    });
+    const json = await res.json();
+    setLoading(false);
+    if (!res.ok) { setError(json.error || "Invalid token"); return; }
+    setBotInfo(json.data);
+    setStep("server");
+  };
+
+  const connectServer = async (serverId: string) => {
+    setLoading(true);
+    setError("");
+    const res = await fetch("/api/messaging/discord", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "connect", serverId }),
+    });
+    const json = await res.json();
+    setLoading(false);
+    if (!res.ok) { setError(json.error || "Failed to connect"); return; }
+    setConfig({ ...config, enabled: true, serverId });
+    setStep("connected");
+  };
+
+  const disconnect = async () => {
+    await fetch("/api/messaging/discord", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "disconnect" }),
+    });
+    setConfig(null);
+    setStep("idle");
+    setToken("");
+    setBotInfo(null);
+  };
+
+  if (step === "loading") {
+    return <div className="py-8 text-sm text-muted-foreground">Loading Discord config...</div>;
+  }
+
+  if (step === "connected" && config) {
+    return (
+      <div className="max-w-lg space-y-4 mt-4">
+        <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-900 p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-green-500" />
+            <h4 className="text-sm font-medium">Discord Connected</h4>
+          </div>
+          <div className="text-sm text-muted-foreground space-y-1">
+            <p>Bot: <span className="font-medium">{config.botUsername}</span></p>
+            {config.serverName && <p>Server: <span className="font-medium">{config.serverName}</span></p>}
+          </div>
+        </div>
+        {openclaw && (
+          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <span className={`w-1.5 h-1.5 rounded-full ${openclaw.installed ? "bg-green-500" : "bg-red-500"}`} />
+              OpenClaw {openclaw.installed ? "installed" : "not installed"}
+            </span>
+            <span className="flex items-center gap-1">
+              <span className={`w-1.5 h-1.5 rounded-full ${openclaw.gatewayRunning ? "bg-green-500" : "bg-yellow-500"}`} />
+              Gateway {openclaw.gatewayRunning ? "running" : "stopped"}
+            </span>
+          </div>
+        )}
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={disconnect}>Disconnect</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-lg space-y-4 mt-4">
+      {/* Step 1: Create bot */}
+      <div className="rounded-lg border p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className={`w-5 h-5 rounded-full text-xs flex items-center justify-center font-medium ${botInfo || step === "server" ? "bg-green-500 text-white" : "bg-muted text-muted-foreground"}`}>1</span>
+          <h4 className="text-sm font-medium">Create a Discord bot</h4>
+        </div>
+        {step === "idle" || step === "token" ? (
+          <div className="space-y-2 pl-7">
+            <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside">
+              <li>Go to <a href="https://discord.com/developers/applications" target="_blank" rel="noopener" className="underline">Discord Developer Portal</a></li>
+              <li>Click <span className="font-medium">New Application</span> → name it (e.g., &quot;Event OS&quot;)</li>
+              <li>Go to <span className="font-medium">Bot</span> tab → click <span className="font-medium">Reset Token</span> → copy it</li>
+              <li>Under <span className="font-medium">Privileged Gateway Intents</span>, turn on <span className="font-medium">Message Content Intent</span></li>
+              <li>Go to <span className="font-medium">OAuth2</span> → check <span className="font-medium">bot</span> + <span className="font-medium">applications.commands</span></li>
+              <li>Under Bot Permissions, check: View Channels, Send Messages, Read Message History, Add Reactions</li>
+              <li>Copy the invite URL → open it → add bot to your server</li>
+            </ol>
+            <div className="flex gap-2 pt-1">
+              <Input
+                type="password"
+                placeholder="Paste bot token..."
+                value={token}
+                onChange={(e) => { setToken(e.target.value); setError(""); }}
+              />
+              <Button size="sm" disabled={!token || loading} onClick={validateToken}>
+                {loading ? "Checking..." : "Verify"}
+              </Button>
+            </div>
+            {error && <p className="text-xs text-destructive">{error}</p>}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground pl-7">
+            Bot: <span className="font-medium">{botInfo?.username || config?.botUsername}</span>
+          </p>
+        )}
+      </div>
+
+      {/* Step 2: Enter server ID */}
+      {step === "server" && (
+        <div className="rounded-lg border p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full text-xs flex items-center justify-center font-medium bg-muted text-muted-foreground">2</span>
+            <h4 className="text-sm font-medium">Connect to your server</h4>
+          </div>
+          <div className="space-y-2 pl-7">
+            <p className="text-xs text-muted-foreground">
+              Right-click your server icon in Discord → <span className="font-medium">Copy Server ID</span>.
+              (Enable Developer Mode first: User Settings → Advanced → Developer Mode)
+            </p>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Paste Server ID..."
+                id="discord-server-id"
+                onChange={() => setError("")}
+              />
+              <Button size="sm" disabled={loading} onClick={() => {
+                const id = (document.getElementById("discord-server-id") as HTMLInputElement)?.value?.trim();
+                if (id && /^\d+$/.test(id)) {
+                  connectServer(id);
+                } else {
+                  setError("Server ID should be a number (e.g., 1234567890)");
+                }
+              }}>
+                {loading ? "Connecting..." : "Connect"}
+              </Button>
+            </div>
+            {error && <p className="text-xs text-destructive">{error}</p>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
