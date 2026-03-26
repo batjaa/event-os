@@ -26,6 +26,10 @@ export const organizations = sqliteTable("organizations", {
   id: uuidPk(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
+  contactEmail: text("contact_email"),
+  website: text("website"),
+  brandColor: text("brand_color"),
+  logoUrl: text("logo_url"),
   createdAt: tsNow("created_at"),
   updatedAt: tsNow("updated_at"),
 });

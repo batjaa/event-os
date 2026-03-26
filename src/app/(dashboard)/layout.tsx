@@ -6,6 +6,38 @@ import { Sidebar } from "@/components/sidebar";
 import { ChatPanel } from "@/components/chat-panel";
 import { ConfirmProvider } from "@/components/confirm-dialog";
 
+function OrgBranding() {
+  useEffect(() => {
+    fetch("/api/organizations")
+      .then((r) => r.json())
+      .then((d) => {
+        const { logoUrl, brandColor } = d.data || {};
+        // Dynamic favicon
+        if (logoUrl) {
+          let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null;
+          if (!link) {
+            link = document.createElement("link");
+            link.rel = "icon";
+            document.head.appendChild(link);
+          }
+          link.href = logoUrl;
+        }
+        // Dynamic brand color — override CSS custom properties
+        if (brandColor) {
+          document.documentElement.style.setProperty("--primary", brandColor);
+          document.documentElement.style.setProperty("--ring", brandColor);
+          document.documentElement.style.setProperty("--chart-1", brandColor);
+          document.documentElement.style.setProperty("--sidebar-primary", brandColor);
+          document.documentElement.style.setProperty("--sidebar-accent", `${brandColor}26`);
+          document.documentElement.style.setProperty("--sidebar-accent-foreground", brandColor);
+          document.documentElement.style.setProperty("--sidebar-ring", brandColor);
+        }
+      })
+      .catch(() => {});
+  }, []);
+  return null;
+}
+
 export default function DashboardLayout({
   children,
 }: {
@@ -64,6 +96,7 @@ export default function DashboardLayout({
 
   return (
     <ConfirmProvider>
+    <OrgBranding />
     <div className="min-h-screen bg-background">
       <Sidebar onToggleChat={toggleChat} chatOpen={chatOpen} />
       <main
