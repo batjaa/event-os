@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import * as schema from "@/db/schema";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { ilikeFn as ilike } from "@/db/dialect";
 import { AgentIntent, DispatchResult } from "./types";
 import { AgentContext } from "./dispatcher";
@@ -91,6 +91,12 @@ export async function handleQuery(
     };
   }
 
+  // LLM-generated SQL for complex queries (joins, aggregations)
+  if (intent.action === "sql") {
+    const { executeSqlQuery } = await import("./sql-query");
+    return executeSqlQuery(intent.message || "", ctx);
+  }
+
   const config = TABLE_MAP[entityType];
   const { table } = config;
 
@@ -114,6 +120,96 @@ export async function handleQuery(
   }
 }
 
+// ─── Enum valid values ────────────────────────────────
+
+const VALID_ENUM_VALUES: Record<string, Set<string>> = {
+  stage: new Set(["lead", "engaged", "confirmed", "declined"]),
+  status: new Set(["pending", "accepted", "rejected", "waitlisted", "todo", "in_progress", "done", "blocked", "draft", "scheduled", "published", "cancelled"]),
+  priority: new Set(["low", "medium", "high", "urgent"]),
+  talkType: new Set(["talk", "workshop", "panel", "keynote"]),
+  type: new Set(["talk", "workshop", "panel", "keynote", "break", "networking", "tv", "online", "print", "podcast", "blog", "speaker_announcement", "sponsor_promo", "event_update", "social_post"]),
+  platform: new Set(["twitter", "facebook", "instagram", "linkedin", "telegram"]),
+  source: new Set(["intake", "outreach", "sponsored"]),
+};
+
+// Try to interpret invalid enum values — e.g. "not confirmed" → invert to ["lead","engaged","declined"]
+function resolveEnumFilter(field: string, value: string): { values: string[]; negate: boolean } | null {
+  const validSet = VALID_ENUM_VALUES[field];
+  if (!validSet) return null;
+
+  const lower = value.toLowerCase().trim();
+
+  // Direct match
+  if (validSet.has(lower)) return { values: [lower], negate: false };
+
+  // Negation patterns: "not confirmed", "unconfirmed", "non-confirmed"
+  const negationMatch = lower.match(/^(?:not |un|non-?)(.+)$/);
+  if (negationMatch) {
+    const target = negationMatch[1].trim();
+    if (validSet.has(target)) {
+      // Return all values EXCEPT the negated one
+      const remaining = [...validSet].filter((v) => v !== target);
+      return { values: remaining, negate: false };
+    }
+  }
+
+  // No match — skip this filter rather than sending garbage to DB
+  return null;
+}
+
+// ─── Shared: build filter conditions from intent params ──
+
+function buildFilterConditions(
+  filters: Record<string, unknown>,
+  table: any,
+): any[] {
+  const conditions: any[] = [];
+  const enumFields = new Set(["stage", "status", "priority", "talkType", "type", "platform", "source"]);
+
+  for (const [key, value] of Object.entries(filters)) {
+    if (!value) continue;
+    const col = resolveField(key);
+    const actualCol = col in table ? col : key in table ? key : null;
+    if (!actualCol) continue;
+
+    // Array value → validate each, then IN clause
+    if (Array.isArray(value)) {
+      if (enumFields.has(actualCol)) {
+        const validSet = VALID_ENUM_VALUES[actualCol];
+        const validValues = value.filter((v): v is string => typeof v === "string" && (validSet?.has(v.toLowerCase()) ?? true)).map((v) => v.toLowerCase());
+        if (validValues.length > 0) {
+          conditions.push(inArray((table as any)[actualCol], validValues));
+        }
+      } else {
+        const strings = value.filter((v): v is string => typeof v === "string");
+        if (strings.length > 0) {
+          conditions.push(inArray((table as any)[actualCol], strings));
+        }
+      }
+      continue;
+    }
+
+    if (typeof value !== "string") continue;
+
+    // Enum fields — validate and resolve
+    if (enumFields.has(actualCol)) {
+      const resolved = resolveEnumFilter(actualCol, value);
+      if (resolved) {
+        if (resolved.values.length === 1) {
+          conditions.push(eq((table as any)[actualCol], resolved.values[0]));
+        } else {
+          conditions.push(inArray((table as any)[actualCol], resolved.values));
+        }
+      }
+      // If null — invalid value, skip silently instead of crashing
+    } else {
+      conditions.push(ilike((table as any)[actualCol], `%${value}%`));
+    }
+  }
+
+  return conditions;
+}
+
 // ─── COUNT ───────────────────────────────────────────
 
 async function handleCount(
@@ -122,33 +218,12 @@ async function handleCount(
   config: typeof TABLE_MAP[string]
 ): Promise<DispatchResult> {
   const { table, pluralLabel } = config;
-  const filters = (intent.params?.filters as Record<string, string>) || {};
+  const filters = (intent.params?.filters as Record<string, unknown>) || {};
 
-  // Build conditions
   const conditions: any[] = [];
-
-  // Org scoping — use editionId for entity tables, orgId for tasks/campaigns
-  if ("editionId" in table) {
-    conditions.push(eq(table.editionId, ctx.editionId));
-  }
-  if ("organizationId" in table) {
-    conditions.push(eq(table.organizationId, ctx.orgId));
-  }
-
-  // Apply filters from intent (with alias resolution + ILIKE for string values)
-  for (const [key, value] of Object.entries(filters)) {
-    const col = resolveField(key);
-    // Try resolved alias first, then original key (e.g. speaker has "company" not "companyName")
-    const actualCol = col in table ? col : key in table ? key : null;
-    if (actualCol && value) {
-      const enumFields = ["stage", "status", "priority", "talkType", "type", "platform", "source"];
-      if (enumFields.includes(actualCol)) {
-        conditions.push(eq((table as any)[actualCol], value));
-      } else {
-        conditions.push(ilike((table as any)[actualCol], `%${value}%`));
-      }
-    }
-  }
+  if ("editionId" in table) conditions.push(eq(table.editionId, ctx.editionId));
+  if ("organizationId" in table) conditions.push(eq(table.organizationId, ctx.orgId));
+  conditions.push(...buildFilterConditions(filters, table));
 
   const result = await db
     .select({ count: sql<number>`count(*)` })
@@ -177,25 +252,13 @@ async function handleList(
   config: typeof TABLE_MAP[string]
 ): Promise<DispatchResult> {
   const { table, nameField, pluralLabel } = config;
-  const filters = (intent.params?.filters as Record<string, string>) || {};
+  const filters = (intent.params?.filters as Record<string, unknown>) || {};
   const limit = (intent.params?.limit as number) || 10;
 
   const conditions: any[] = [];
-
-  if ("editionId" in table) {
-    conditions.push(eq(table.editionId, ctx.editionId));
-  }
-  if ("organizationId" in table) {
-    conditions.push(eq(table.organizationId, ctx.orgId));
-  }
-
-  for (const [key, value] of Object.entries(filters)) {
-    const col = resolveField(key);
-    const actualCol = col in table ? col : key in table ? key : null;
-    if (actualCol && value) {
-      conditions.push(eq((table as any)[actualCol], value));
-    }
-  }
+  if ("editionId" in table) conditions.push(eq(table.editionId, ctx.editionId));
+  if ("organizationId" in table) conditions.push(eq(table.organizationId, ctx.orgId));
+  conditions.push(...buildFilterConditions(filters, table));
 
   const rows = await db
     .select()

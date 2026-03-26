@@ -87,7 +87,7 @@ Classify the user's intent and respond with ONLY valid JSON:
 {
   "intent": "manage" | "query" | "extract" | "chitchat",
   "entityType": "speaker" | "sponsor" | "venue" | "booth" | "volunteer" | "media" | "task" | "campaign" | "attendee" | null,
-  "action": "create" | "update" | "delete" | "list" | "count" | "search" | null,
+  "action": "create" | "update" | "delete" | "list" | "count" | "search" | "sql" | null,
   "params": {},
   "searchBy": "name" | "email" | "company" | null,
   "searchValue": null,
@@ -102,6 +102,7 @@ RULES:
 - For QUERY/count: set params.filters with field conditions (e.g., {"stage": "confirmed"})
 - For QUERY/list: set params.filters for filtering, params.limit for max results (default 10)
 - For QUERY/search: set searchBy and searchValue for finding specific entities
+- For QUERY/sql: use when the question requires joining tables, aggregation, or complex logic that count/list/search can't handle. Examples: "speakers without sessions", "overdue checklist items", "tasks per team", "which sponsors haven't confirmed?"
 - For EXTRACT: only when input is clearly bulk data (CSV, list of multiple entities, chat log with many records)
 - For "tell me about this event", "event info", "event details" → entityType: "event", action: "search"
 - For chitchat: greetings, thank you, unclear intent → set a helpful message and suggest what you can do

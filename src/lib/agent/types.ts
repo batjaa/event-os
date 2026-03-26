@@ -37,7 +37,7 @@ export type InputType = "text" | "csv" | "file";
 export type AgentIntent = {
   intent: "manage" | "query" | "extract" | "chitchat";
   entityType: EntityType | null;
-  action: "create" | "update" | "delete" | "list" | "count" | "search" | null;
+  action: "create" | "update" | "delete" | "list" | "count" | "search" | "sql" | null;
   params: Record<string, unknown>;
   searchBy: "name" | "email" | "company" | null;
   searchValue: string | null;
