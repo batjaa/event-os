@@ -579,10 +579,65 @@ export default function SettingsPage() {
   );
 }
 
-// ─── Messaging Tab — Multi-platform ───────────────────
+// ─── Messaging Tab — Redesigned ───────────────────────
+
+type PlatformConfig = {
+  id: string;
+  botUsername?: string;
+  groupChatId?: string;
+  groupTitle?: string;
+  enabled?: boolean;
+};
+type PlatformLink = {
+  id: string;
+  platform: string;
+  platformUserId: string;
+  displayName: string | null;
+  userName: string | null;
+  userEmail: string;
+};
+type OrgMember = { userId: string; name: string | null; email: string; role: string };
 
 function MessagingTab() {
-  const [activePlatform, setActivePlatform] = useState<"telegram" | "discord" | null>("telegram");
+  const [activePlatform, setActivePlatform] = useState<"telegram" | "discord" | null>(null);
+  const [links, setLinks] = useState<PlatformLink[]>([]);
+  const [members, setMembers] = useState<OrgMember[]>([]);
+  const [tgConfig, setTgConfig] = useState<PlatformConfig | null>(null);
+  const [dcConfig, setDcConfig] = useState<PlatformConfig | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  // Load all data once
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/messaging/telegram").then((r) => r.json()).catch(() => ({})),
+      fetch("/api/messaging/discord").then((r) => r.json()).catch(() => ({})),
+      fetch("/api/messaging/links").then((r) => r.json()).catch(() => ({})),
+    ]).then(([tg, dc, lk]) => {
+      if (tg.data) setTgConfig(tg.data);
+      if (dc.data) setDcConfig(dc.data);
+      if (lk.data) {
+        setLinks(lk.data.links || []);
+        setMembers(lk.data.members || []);
+      }
+      // Auto-expand connected platform or first available
+      if (tg.data?.enabled) setActivePlatform("telegram");
+      else if (dc.data?.enabled) setActivePlatform("discord");
+      setLoaded(true);
+    });
+  }, []);
+
+  const tgLinks = links.filter((l) => l.platform === "telegram");
+  const dcLinks = links.filter((l) => l.platform === "discord");
+
+  const refreshLinks = async () => {
+    const res = await fetch("/api/messaging/links");
+    const json = await res.json();
+    if (json.data) setLinks(json.data.links || []);
+  };
+
+  if (!loaded) {
+    return <div className="py-8 text-sm text-muted-foreground">Loading messaging config...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -591,46 +646,411 @@ function MessagingTab() {
         when @mentioned — query data, create records, manage your event through conversation.
       </p>
 
+      {/* Platform selector cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Telegram card */}
         <button
-          onClick={() => setActivePlatform(activePlatform === "telegram" ? null : "telegram")}
+          onClick={() => setActivePlatform("telegram")}
           className={`text-left rounded-lg border p-4 transition-colors ${activePlatform === "telegram" ? "border-primary bg-primary/5" : "hover:border-muted-foreground/30"}`}
         >
           <div className="flex items-center gap-3">
             <img src="/telegram-logo.png" alt="Telegram" className="w-10 h-10 rounded-lg" />
-            <div>
-              <h4 className="text-sm font-medium">Telegram</h4>
-              <p className="text-xs text-muted-foreground">Group chat with @mention</p>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-medium">Telegram</h4>
+                {tgConfig?.enabled && <span className="w-1.5 h-1.5 rounded-full bg-green-500" />}
+              </div>
+              <p className="text-xs text-muted-foreground truncate">
+                {tgConfig?.enabled ? `@${tgConfig.botUsername} · ${tgLinks.length} member${tgLinks.length !== 1 ? "s" : ""}` : "Not connected"}
+              </p>
             </div>
           </div>
         </button>
 
-        {/* Discord card */}
         <button
-          onClick={() => setActivePlatform(activePlatform === "discord" ? null : "discord")}
+          onClick={() => setActivePlatform("discord")}
           className={`text-left rounded-lg border p-4 transition-colors ${activePlatform === "discord" ? "border-primary bg-primary/5" : "hover:border-muted-foreground/30"}`}
         >
           <div className="flex items-center gap-3">
             <img src="/discord-logo.png" alt="Discord" className="w-10 h-10 rounded-lg" />
-            <div>
-              <h4 className="text-sm font-medium">Discord</h4>
-              <p className="text-xs text-muted-foreground">Server channels + DMs</p>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-medium">Discord</h4>
+                {dcConfig?.enabled && <span className="w-1.5 h-1.5 rounded-full bg-green-500" />}
+              </div>
+              <p className="text-xs text-muted-foreground truncate">
+                {dcConfig?.enabled ? `${dcConfig.botUsername} · ${dcLinks.length} member${dcLinks.length !== 1 ? "s" : ""}` : "Not connected"}
+              </p>
             </div>
           </div>
         </button>
       </div>
 
-      {activePlatform === "telegram" && <TelegramSetup />}
-      {activePlatform === "discord" && <DiscordSetup />}
+      {/* Platform-specific section */}
+      {activePlatform === "telegram" && (
+        <PlatformSection
+          platform="telegram"
+          logo="/telegram-logo.png"
+          config={tgConfig}
+          links={tgLinks}
+          members={members}
+          onConfigChange={setTgConfig}
+          onLinksChange={refreshLinks}
+          setupComponent={<TelegramSetup onConnected={(cfg) => setTgConfig(cfg)} />}
+        />
+      )}
+      {activePlatform === "discord" && (
+        <PlatformSection
+          platform="discord"
+          logo="/discord-logo.png"
+          config={dcConfig}
+          links={dcLinks}
+          members={members}
+          onConfigChange={setDcConfig}
+          onLinksChange={refreshLinks}
+          setupComponent={<DiscordSetup onConnected={(cfg) => setDcConfig(cfg)} />}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Platform Section — unified layout per platform ───
+
+function PlatformSection({
+  platform, logo, config, links, members, onConfigChange, onLinksChange, setupComponent,
+}: {
+  platform: string;
+  logo: string;
+  config: PlatformConfig | null;
+  links: PlatformLink[];
+  members: OrgMember[];
+  onConfigChange: (c: PlatformConfig | null) => void;
+  onLinksChange: () => void;
+  setupComponent: React.ReactNode;
+}) {
+  const [showLinkForm, setShowLinkForm] = useState(false);
+  const [formMember, setFormMember] = useState("");
+  const [formPlatformId, setFormPlatformId] = useState("");
+  const [formName, setFormName] = useState("");
+  const [linkError, setLinkError] = useState("");
+
+  const addLink = async () => {
+    if (!formMember || !formPlatformId.trim()) {
+      setLinkError("Select a team member and enter their platform ID");
+      return;
+    }
+    setLinkError("");
+    const res = await fetch("/api/messaging/links", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: formMember,
+        platform,
+        platformUserId: formPlatformId.trim(),
+        displayName: formName || undefined,
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok) { setLinkError(json.error || "Failed"); return; }
+    setShowLinkForm(false);
+    setFormMember("");
+    setFormPlatformId("");
+    setFormName("");
+    onLinksChange();
+  };
+
+  const removeLink = async (id: string) => {
+    await fetch(`/api/messaging/links?id=${id}`, { method: "DELETE" });
+    onLinksChange();
+  };
+
+  const disconnect = async () => {
+    await fetch(`/api/messaging/${platform}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "disconnect" }),
+    });
+    onConfigChange(null);
+  };
+
+  // Not connected — show setup flow
+  if (!config?.enabled) {
+    return <div className="mt-2">{setupComponent}</div>;
+  }
+
+  // Connected — show status + members
+  return (
+    <div className="space-y-4">
+      {/* Connection status */}
+      <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-900 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <img src={logo} alt={platform} className="w-6 h-6 rounded" />
+            <div>
+              <p className="text-sm font-medium">
+                {platform === "telegram" ? `@${config.botUsername}` : config.botUsername}
+              </p>
+              {config.groupTitle && (
+                <p className="text-xs text-muted-foreground">{config.groupTitle}</p>
+              )}
+            </div>
+          </div>
+          <Button variant="outline" size="sm" onClick={disconnect}>Disconnect</Button>
+        </div>
+      </div>
+
+      {/* Linked members for this platform */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-sm font-medium">
+            Team Members ({platform === "telegram" ? "Telegram" : "Discord"})
+          </h4>
+          <Button size="sm" variant="outline" onClick={() => setShowLinkForm(!showLinkForm)}>
+            {showLinkForm ? "Cancel" : "+ Link Member"}
+          </Button>
+        </div>
+
+        {showLinkForm && (
+          <div className="rounded-lg border p-3 mb-3 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Team Member</Label>
+                <select
+                  className="w-full rounded-md border bg-background px-3 py-1.5 text-sm"
+                  value={formMember}
+                  onChange={(e) => setFormMember(e.target.value)}
+                >
+                  <option value="">Select...</option>
+                  {members.map((m) => (
+                    <option key={m.userId} value={m.userId}>
+                      {m.name || m.email} ({m.role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">
+                  {platform === "telegram" ? "Telegram User ID" : "Discord User ID"}
+                </Label>
+                <Input
+                  className="h-8 text-sm"
+                  placeholder={platform === "telegram" ? "e.g., 123456789" : "e.g., 836852783227207690"}
+                  value={formPlatformId}
+                  onChange={(e) => { setFormPlatformId(e.target.value); setLinkError(""); }}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Display Name</Label>
+                <Input
+                  className="h-8 text-sm"
+                  placeholder="@username"
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {platform === "telegram"
+                ? "To find your Telegram ID: message @userinfobot in Telegram."
+                : "To find your Discord ID: right-click your name → Copy User ID. (Turn on Developer Mode in Settings → Advanced first.)"}
+            </p>
+            {linkError && <p className="text-xs text-destructive">{linkError}</p>}
+            <Button size="sm" onClick={addLink}>Link Account</Button>
+          </div>
+        )}
+
+        {links.length > 0 ? (
+          <div className="rounded-lg border divide-y">
+            {links.map((link) => (
+              <div key={link.id} className="flex items-center justify-between px-3 py-2">
+                <div>
+                  <p className="text-sm font-medium">{link.userName || link.userEmail}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {link.displayName ? `${link.displayName} · ` : ""}{link.platformUserId}
+                  </p>
+                </div>
+                <button
+                  onClick={() => removeLink(link.id)}
+                  className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground border rounded-lg p-3">
+            No team members linked yet. The bot won&apos;t recognize anyone until you link their accounts.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── (PlatformLinks removed — functionality in PlatformSection) ──
+function _unused_PlatformLinks() { void 0; } void _unused_PlatformLinks;
+function __old_PlatformLinks() {
+  const [links, setLinks] = useState<{ id: string; platform: string; platformUserId: string; displayName: string | null; userName: string | null; userEmail: string }[]>([]);
+  const [members, setMembers] = useState<{ userId: string; name: string | null; email: string; role: string }[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [formPlatform, setFormPlatform] = useState("telegram");
+  const [formUserId, setFormUserId] = useState("");
+  const [formMember, setFormMember] = useState("");
+  const [formName, setFormName] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch("/api/messaging/links").then(async (res) => {
+      const json = await res.json();
+      if (json.data) {
+        setLinks(json.data.links || []);
+        setMembers(json.data.members || []);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const addLink = async () => {
+    if (!formMember || !formUserId.trim()) {
+      setError("Select a team member and enter their platform ID");
+      return;
+    }
+    setError("");
+    const res = await fetch("/api/messaging/links", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: formMember,
+        platform: formPlatform,
+        platformUserId: formUserId.trim(),
+        displayName: formName || undefined,
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok) { setError(json.error || "Failed"); return; }
+    // Refresh
+    setShowForm(false);
+    setFormUserId("");
+    setFormName("");
+    const refreshRes = await fetch("/api/messaging/links");
+    const refreshJson = await refreshRes.json();
+    if (refreshJson.data) setLinks(refreshJson.data.links || []);
+  };
+
+  const removeLink = async (id: string) => {
+    await fetch(`/api/messaging/links?id=${id}`, { method: "DELETE" });
+    setLinks((prev) => prev.filter((l) => l.id !== id));
+  };
+
+  return (
+    <div className="border-t pt-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-medium">Linked Team Members</h3>
+          <p className="text-xs text-muted-foreground">
+            Connect team members&apos; Telegram or Discord accounts so the bot recognizes them.
+          </p>
+        </div>
+        <Button size="sm" onClick={() => setShowForm(!showForm)}>
+          {showForm ? "Cancel" : "+ Link Member"}
+        </Button>
+      </div>
+
+      {showForm && (
+        <div className="rounded-lg border p-4 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Team Member</Label>
+              <select
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                value={formMember}
+                onChange={(e) => setFormMember(e.target.value)}
+              >
+                <option value="">Select a member...</option>
+                {members.map((m) => (
+                  <option key={m.userId} value={m.userId}>
+                    {m.name || m.email} ({m.role})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Platform</Label>
+              <select
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                value={formPlatform}
+                onChange={(e) => setFormPlatform(e.target.value)}
+              >
+                <option value="telegram">Telegram</option>
+                <option value="discord">Discord</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Platform User ID</Label>
+              <Input
+                placeholder={formPlatform === "telegram" ? "e.g., 123456789" : "e.g., 836852783227207690"}
+                value={formUserId}
+                onChange={(e) => { setFormUserId(e.target.value); setError(""); }}
+              />
+              <p className="text-xs text-muted-foreground">
+                {formPlatform === "telegram"
+                  ? "Message @userinfobot on Telegram to get your numeric ID"
+                  : "Right-click username in Discord → Copy User ID (enable Developer Mode first)"}
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Display Name (optional)</Label>
+              <Input
+                placeholder="e.g., @username"
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+              />
+            </div>
+          </div>
+          {error && <p className="text-xs text-destructive">{error}</p>}
+          <Button size="sm" onClick={addLink}>Link Account</Button>
+        </div>
+      )}
+
+      {links.length > 0 ? (
+        <div className="rounded-lg border divide-y">
+          {links.map((link) => (
+            <div key={link.id} className="flex items-center justify-between px-4 py-2.5">
+              <div className="flex items-center gap-3">
+                <img
+                  src={link.platform === "telegram" ? "/telegram-logo.png" : "/discord-logo.png"}
+                  alt={link.platform}
+                  className="w-5 h-5 rounded"
+                />
+                <div>
+                  <p className="text-sm font-medium">{link.userName || link.userEmail}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {link.displayName || link.platformUserId}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => removeLink(link.id)}
+                className="text-xs text-muted-foreground hover:text-destructive"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground py-2">
+          No team members linked yet. Link members so the bot recognizes them in group chats.
+        </p>
+      )}
     </div>
   );
 }
 
 // ─── Discord Setup Component ──────────────────────────
 
-function DiscordSetup() {
-  const [step, setStep] = useState<"loading" | "idle" | "token" | "server" | "connected">("loading");
+function DiscordSetup({ onConnected }: { onConnected?: (cfg: PlatformConfig) => void }) {
+  const [step, setStep] = useState<"loading" | "idle" | "token" | "server">("loading");
   const [token, setToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -643,7 +1063,7 @@ function DiscordSetup() {
       const json = await res.json();
       if (json.data) {
         setConfig(json.data);
-        setStep(json.data.enabled ? "connected" : json.data.botUsername ? "server" : "idle");
+        setStep(json.data.botUsername ? "server" : "idle");
       } else {
         setStep("idle");
       }
@@ -677,56 +1097,13 @@ function DiscordSetup() {
     const json = await res.json();
     setLoading(false);
     if (!res.ok) { setError(json.error || "Failed to connect"); return; }
-    setConfig({ ...config, enabled: true, serverId });
-    setStep("connected");
-  };
-
-  const disconnect = async () => {
-    await fetch("/api/messaging/discord", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "disconnect" }),
-    });
-    setConfig(null);
-    setStep("idle");
-    setToken("");
-    setBotInfo(null);
+    const newConfig = { ...config, enabled: true, serverId, groupTitle: json.data?.serverName, botUsername: config?.botUsername || botInfo?.username };
+    setConfig(newConfig);
+    onConnected?.({ id: "", ...newConfig } as PlatformConfig);
   };
 
   if (step === "loading") {
-    return <div className="py-8 text-sm text-muted-foreground">Loading Discord config...</div>;
-  }
-
-  if (step === "connected" && config) {
-    return (
-      <div className="max-w-lg space-y-4 mt-4">
-        <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-900 p-4 space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-green-500" />
-            <h4 className="text-sm font-medium">Discord Connected</h4>
-          </div>
-          <div className="text-sm text-muted-foreground space-y-1">
-            <p>Bot: <span className="font-medium">{config.botUsername}</span></p>
-            {config.serverName && <p>Server: <span className="font-medium">{config.serverName}</span></p>}
-          </div>
-        </div>
-        {openclaw && (
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <span className={`w-1.5 h-1.5 rounded-full ${openclaw.installed ? "bg-green-500" : "bg-red-500"}`} />
-              OpenClaw {openclaw.installed ? "installed" : "not installed"}
-            </span>
-            <span className="flex items-center gap-1">
-              <span className={`w-1.5 h-1.5 rounded-full ${openclaw.gatewayRunning ? "bg-green-500" : "bg-yellow-500"}`} />
-              Gateway {openclaw.gatewayRunning ? "running" : "stopped"}
-            </span>
-          </div>
-        )}
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={disconnect}>Disconnect</Button>
-        </div>
-      </div>
-    );
+    return <div className="py-4 text-sm text-muted-foreground">Loading...</div>;
   }
 
   return (
@@ -807,8 +1184,8 @@ function DiscordSetup() {
 
 // ─── Telegram Setup Component ─────────────────────────
 
-function TelegramSetup() {
-  const [step, setStep] = useState<"loading" | "idle" | "token" | "group" | "connected">("loading");
+function TelegramSetup({ onConnected }: { onConnected?: (cfg: PlatformConfig) => void }) {
+  const [step, setStep] = useState<"loading" | "idle" | "token" | "group">("loading");
   const [token, setToken] = useState("");
   const [botInfo, setBotInfo] = useState<{ botUsername: string; botName: string } | null>(null);
   const [groups, setGroups] = useState<{ chatId: string; title: string }[]>([]);
@@ -823,7 +1200,7 @@ function TelegramSetup() {
       const json = await res.json();
       if (json.data) {
         setConfig(json.data);
-        setStep(json.data.enabled ? "connected" : json.data.botUsername ? "group" : "idle");
+        setStep(json.data.botUsername ? "group" : "idle");
       } else {
         setStep("idle");
       }
@@ -878,8 +1255,9 @@ function TelegramSetup() {
     });
     setLoading(false);
     if (res.ok) {
-      setConfig({ botUsername: botInfo?.botUsername || config?.botUsername, groupTitle: title, enabled: true });
-      setStep("connected");
+      const newConfig = { botUsername: botInfo?.botUsername || config?.botUsername, groupChatId: chatId, groupTitle: title, enabled: true };
+      setConfig(newConfig);
+      onConnected?.({ id: "", ...newConfig } as PlatformConfig);
     }
   };
 
@@ -900,61 +1278,6 @@ function TelegramSetup() {
   if (step === "loading") {
     return (
       <div className="max-w-lg py-8 text-sm text-muted-foreground">Loading messaging config...</div>
-    );
-  }
-
-  // Connected state
-  if (step === "connected" && config) {
-    return (
-      <div className="max-w-lg space-y-4">
-        <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-900 p-4 space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-green-500" />
-            <h4 className="text-sm font-medium">Telegram Connected</h4>
-          </div>
-          <div className="text-sm text-muted-foreground space-y-1">
-            <p>Bot: <span className="font-medium">@{config.botUsername}</span></p>
-            {config.groupTitle && <p>Group: <span className="font-medium">{config.groupTitle}</span></p>}
-          </div>
-        </div>
-        {openclaw && (
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <span className={`w-1.5 h-1.5 rounded-full ${openclaw.installed ? "bg-green-500" : "bg-red-500"}`} />
-              OpenClaw {openclaw.installed ? "installed" : "not installed"}
-            </span>
-            <span className="flex items-center gap-1">
-              <span className={`w-1.5 h-1.5 rounded-full ${openclaw.gatewayRunning ? "bg-green-500" : "bg-yellow-500"}`} />
-              Gateway {openclaw.gatewayRunning ? "running" : "stopped"}
-            </span>
-          </div>
-        )}
-        <p className="text-xs text-muted-foreground">
-          Team members can @mention the bot in the group to query event data,
-          create records, and manage the event. Multi-turn conversations, scheduling,
-          and context memory are powered by OpenClaw.
-        </p>
-        <div className="flex gap-2">
-          {openclaw && !openclaw.gatewayRunning && (
-            <Button size="sm" onClick={async () => {
-              setLoading(true);
-              await fetch("/api/messaging/telegram", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "connect", groupChatId: config?.groupChatId || "", groupTitle: config?.groupTitle }),
-              });
-              setLoading(false);
-              // Refresh status
-              const res = await fetch("/api/messaging/telegram");
-              const json = await res.json();
-              if (json.openclaw) setOpenclaw(json.openclaw);
-            }}>
-              {loading ? "Starting..." : "Start Gateway"}
-            </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={disconnect}>Disconnect</Button>
-        </div>
-      </div>
     );
   }
 
