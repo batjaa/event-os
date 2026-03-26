@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/confirm-dialog";
 import { NotesButton, NotesPanel } from "@/components/notes-panel";
-import { Trash2, MoreHorizontal, CheckCircle2, ListChecks } from "lucide-react";
+import { Trash2, MoreHorizontal, CheckCircle2, ListChecks, Pencil } from "lucide-react";
 
 type OrgUser = { id: string; name: string | null; email: string };
 type ChecklistCount = { done: number; total: number };
@@ -92,11 +92,12 @@ function InlineEdit({
   return (
     <span
       onClick={() => setEditing(true)}
-      className={`cursor-pointer rounded px-1.5 py-0.5 text-xs transition-colors hover:bg-yellow-50 ${
+      className={`group/edit relative cursor-text inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs transition-colors hover:bg-yellow-50 ${
         value ? "" : "text-stone-300 italic"
       }`}
     >
       {value || placeholder || "Click to edit"}
+      <Pencil className="h-3 w-3 text-stone-300 opacity-0 transition-opacity duration-100 group-hover/edit:opacity-100 shrink-0" />
     </span>
   );
 }
@@ -125,7 +126,7 @@ function StageDropdown({
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full z-50 mt-1 rounded-md border bg-white py-1 shadow-lg min-w-[100px]">
+          <div className="absolute left-0 top-full z-50 mt-1 rounded-md border bg-white py-1 shadow-lg min-w-[100px] dropdown-active">
             {stages.map((s) => (
               <button
                 key={s}
@@ -190,7 +191,7 @@ function UserDropdown({
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full z-50 mt-1 rounded-md border bg-white py-1 shadow-lg min-w-[160px]">
+          <div className="absolute left-0 top-full z-50 mt-1 rounded-md border bg-white py-1 shadow-lg min-w-[160px] dropdown-active">
             {users.map((u) => (
               <button
                 key={u.id}

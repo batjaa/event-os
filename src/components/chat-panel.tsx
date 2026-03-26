@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { useAnimatedMount } from "@/lib/use-animated-mount";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -210,14 +211,17 @@ export function ChatPanel({
     }
   };
 
-  if (!isOpen) return null;
+  const { mounted, visible } = useAnimatedMount(isOpen);
+
+  if (!mounted) return null;
 
   return (
     <div
       className={cn(
-        "fixed inset-y-0 right-0 z-50 flex flex-col bg-white border-l border-stone-200 shadow-xl transition-all duration-200",
+        "fixed inset-y-0 right-0 z-50 flex flex-col bg-white border-l border-stone-200 shadow-xl",
         size === "expanded" && "w-full sm:w-[400px]",
-        size === "compact" && "w-[60px]"
+        size === "compact" && "w-[60px]",
+        visible ? "slide-right-active" : mounted ? "slide-right-exit" : "slide-right-enter"
       )}
     >
       {/* Header */}

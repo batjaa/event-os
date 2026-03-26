@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
+import { useAnimatedMount } from "@/lib/use-animated-mount";
 import { Button } from "@/components/ui/button";
-import { X, Maximize2, Minimize2, GripVertical } from "lucide-react";
+import { X, Maximize2, Minimize2 } from "lucide-react";
 
 type DrawerSize = "narrow" | "wide" | "full";
 
@@ -39,6 +40,7 @@ export function EntityDrawer({
 }: EntityDrawerProps) {
   const [size, setSize] = useState<DrawerSize>("wide");
   const [activeTab, setActiveTab] = useState(0);
+  const { mounted, visible } = useAnimatedMount(isOpen);
 
   // Escape to close
   useEffect(() => {
@@ -62,15 +64,16 @@ export function EntityDrawer({
     );
   }, []);
 
-  if (!isOpen) return null;
+  if (!mounted) return null;
 
   return (
     <>
       {/* Backdrop */}
       <div
         className={cn(
-          "fixed inset-0 z-40 transition-colors",
-          size === "full" ? "bg-black/50" : "bg-black/20"
+          "fixed inset-0 z-40",
+          size === "full" ? "bg-black/50" : "bg-black/20",
+          visible ? "backdrop-active" : mounted ? "backdrop-exit" : "backdrop-enter"
         )}
         onClick={onClose}
       />
@@ -78,9 +81,10 @@ export function EntityDrawer({
       {/* Drawer */}
       <div
         className={cn(
-          "fixed inset-y-0 right-0 z-50 flex flex-col bg-white shadow-2xl transition-all duration-200 border-l border-stone-200",
+          "fixed inset-y-0 right-0 z-50 flex flex-col bg-white shadow-2xl border-l border-stone-200",
           sizeWidths[size],
-          "max-lg:w-full" // full-screen on mobile always
+          "max-lg:w-full",
+          visible ? "slide-right-active" : mounted ? "slide-right-exit" : "slide-right-enter"
         )}
       >
         {/* Header */}

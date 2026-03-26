@@ -388,7 +388,7 @@ function TeamPill({
       {menuOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-          <div className="absolute left-0 top-full z-50 mt-1 rounded-md border bg-white py-1 shadow-lg min-w-[120px]">
+          <div className="absolute left-0 top-full z-50 mt-1 rounded-md border bg-white py-1 shadow-lg min-w-[120px] dropdown-active">
             <button
               onClick={() => { setMenuOpen(false); setRenaming(true); }}
               className="block w-full px-3 py-1.5 text-left text-xs hover:bg-stone-50"
@@ -440,8 +440,8 @@ function CreateTaskDialog({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/50" onClick={onClose} />
-      <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-background p-6 shadow-lg">
+      <div className="fixed inset-0 z-50 bg-black/50 backdrop-active" onClick={onClose} />
+      <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg rounded-lg border bg-background p-6 shadow-lg dialog-active">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">New Task</h3>
           <button onClick={onClose} className="rounded p-1 hover:bg-stone-100">
@@ -648,8 +648,8 @@ function TaskDetailDrawer({
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
-      <aside className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-background border-l shadow-xl flex flex-col">
+      <div className="fixed inset-0 z-40 bg-black/30 backdrop-active" onClick={onClose} />
+      <aside className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-background border-l shadow-xl flex flex-col slide-right-active">
         {/* Header */}
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-2">
@@ -758,7 +758,7 @@ function TaskDetailDrawer({
           {/* Notes / Comments */}
           <div className="space-y-3 pt-4 border-t">
             <Label className="text-xs text-muted-foreground uppercase tracking-wider">
-              Notes & Comments ({notes.length})
+              Comments ({notes.length})
             </Label>
 
             {notes.length > 0 && (
