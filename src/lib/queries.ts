@@ -129,11 +129,12 @@ export async function getAttendees() {
 
 export async function getDashboardStats() {
   const ids = await getActiveIds();
-  if (!ids) return { sessions: 0, speakers: 0, attendees: 0, checkedIn: 0 };
+  if (!ids) return { sessions: 0, speakers: 0, attendees: 0, checkedIn: 0, messagingConnected: 0 };
 
   const [sessionCount] = await db.select({ count: count() }).from(schema.sessions).where(eq(schema.sessions.editionId, ids.editionId));
   const [speakerCount] = await db.select({ count: count() }).from(schema.speakerApplications).where(eq(schema.speakerApplications.editionId, ids.editionId));
   const [attendeeCount] = await db.select({ count: count() }).from(schema.attendees).where(eq(schema.attendees.editionId, ids.editionId));
+  const [channelCount] = await db.select({ count: count() }).from(schema.messagingChannels).where(eq(schema.messagingChannels.organizationId, ids.orgId));
   const checkIn = await getCheckInStats();
 
   return {
@@ -141,6 +142,7 @@ export async function getDashboardStats() {
     speakers: Number(speakerCount.count),
     attendees: Number(attendeeCount.count),
     checkedIn: checkIn.checkedIn,
+    messagingConnected: Number(channelCount.count),
   };
 }
 

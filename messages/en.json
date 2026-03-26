@@ -54,7 +54,7 @@
     "getStarted": "Get started",
     "step1": "Create your CFP link and share it with potential speakers",
     "step2": "Import your schedule or add sessions manually",
-    "step3": "Connect your Telegram group for agent notifications",
+    "step3": "Connect a messaging platform (Telegram or Discord)",
     "step4": "Add attendees and generate QR tickets"
   },
   "Notifications": {

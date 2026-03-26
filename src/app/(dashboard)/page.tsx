@@ -22,7 +22,7 @@ export default async function DashboardPage() {
   const steps = [
     { step: 1, key: "step1" as const, done: stats.speakers > 0 },
     { step: 2, key: "step2" as const, done: stats.sessions > 0 },
-    { step: 3, key: "step3" as const, done: false },
+    { step: 3, key: "step3" as const, done: stats.messagingConnected > 0 },
     { step: 4, key: "step4" as const, done: stats.attendees > 0 },
   ];
 
