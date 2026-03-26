@@ -862,6 +862,57 @@ export const accounts = sqliteTable("accounts", {
   sessionState: text("session_state"),
 });
 
+// ─── Job Queue ──────────────────────────────────────────
+//
+//  Job lifecycle:
+//    dispatch() → pending → pop() → processing → handle()
+//                   ▲                    │
+//                   │ fail(backoff)       ├─ success → complete() [DELETE]
+//                   └────────────────────├─ failure (retryable) → fail() → pending
+//                                        └─ failure (final) → bury() → failed_jobs
+//
+
+export const jobs = sqliteTable(
+  "jobs",
+  {
+    id: uuidPk(),
+    name: text("name").notNull(),
+    queue: text("queue").default("default").notNull(),
+    payload: json("payload").notNull(),
+    status: text("status").default("pending").notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    maxAttempts: integer("max_attempts").default(3).notNull(),
+    organizationId: uuidCol("organization_id"),
+    uniqueKey: text("unique_key"),
+    lastError: text("last_error"),
+    availableAt: tsNow("available_at"),
+    reservedAt: ts("reserved_at"),
+    createdAt: tsNow("created_at"),
+  },
+  (table) => [
+    index("jobs_queue_status_available_idx").on(
+      table.queue,
+      table.status,
+      table.availableAt
+    ),
+    uniqueIndex("jobs_unique_key_idx").on(table.uniqueKey),
+  ]
+);
+
+export const failedJobs = sqliteTable(
+  "failed_jobs",
+  {
+    id: uuidPk(),
+    jobName: text("job_name").notNull(),
+    queue: text("queue").notNull(),
+    payload: json("payload").notNull(),
+    error: text("error").notNull(),
+    organizationId: uuidCol("organization_id"),
+    failedAt: tsNow("failed_at"),
+  },
+  (table) => [index("failed_jobs_name_idx").on(table.jobName)]
+);
+
 // ─── Relations ───────────────────────────────────────────
 
 export const organizationsRelations = relations(organizations, ({ many }) => ({
