@@ -3,16 +3,17 @@ export type MailAddress = {
   name?: string;
 };
 
+/** Format a MailAddress as "Name <email>" or just "email". */
+export function formatAddress(addr: MailAddress): string {
+  return addr.name ? `${addr.name} <${addr.email}>` : addr.email;
+}
+
 export type MailEnvelope = {
   to: MailAddress[];
-  cc?: MailAddress[];
-  bcc?: MailAddress[];
-  replyTo?: MailAddress;
   subject: string;
   html: string;
   text?: string;
   tags?: string[];
-  metadata?: Record<string, string>;
 };
 
 export type SendResult = {

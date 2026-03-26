@@ -1,4 +1,5 @@
 import type { MailDriver, MailEnvelope, MailAddress, SendResult } from "../types";
+import { formatAddress } from "../types";
 
 type PostmarkConfig = {
   serverToken: string;
@@ -15,13 +16,9 @@ export class PostmarkDriver implements MailDriver {
   async send(envelope: MailEnvelope, from: MailAddress): Promise<SendResult> {
     const url = "https://api.postmarkapp.com/email";
 
-    const toAddresses = envelope.to
-      .map((r) => r.name ? `${r.name} <${r.email}>` : r.email)
-      .join(", ");
-
     const body: Record<string, unknown> = {
-      From: from.name ? `${from.name} <${from.email}>` : from.email,
-      To: toAddresses,
+      From: formatAddress(from),
+      To: envelope.to.map(formatAddress).join(", "),
       Subject: envelope.subject,
       HtmlBody: envelope.html,
     };

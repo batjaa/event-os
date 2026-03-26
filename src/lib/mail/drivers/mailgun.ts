@@ -1,4 +1,5 @@
 import type { MailDriver, MailEnvelope, MailAddress, SendResult } from "../types";
+import { formatAddress } from "../types";
 
 type MailgunConfig = {
   apiKey: string;
@@ -22,10 +23,10 @@ export class MailgunDriver implements MailDriver {
     const url = `${baseUrl}/v3/${this.config.domain}/messages`;
 
     const formData = new FormData();
-    formData.append("from", from.name ? `${from.name} <${from.email}>` : from.email);
+    formData.append("from", formatAddress(from));
 
     for (const recipient of envelope.to) {
-      formData.append("to", recipient.name ? `${recipient.name} <${recipient.email}>` : recipient.email);
+      formData.append("to", formatAddress(recipient));
     }
 
     formData.append("subject", envelope.subject);

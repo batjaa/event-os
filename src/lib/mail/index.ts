@@ -1,15 +1,13 @@
-import { getMailConfig } from "./config";
+import { getMailConfig, type MailConfig } from "./config";
 import type { MailAddress, MailDriver, Mailable, SendResult } from "./types";
 import { LogDriver } from "./drivers/log";
 import { MailgunDriver } from "./drivers/mailgun";
 import { PostmarkDriver } from "./drivers/postmark";
 import { db } from "@/db";
 import { emailLog } from "@/db/schema";
-import { and, eq, gte } from "drizzle-orm";
+import { and, eq, gte, sql } from "drizzle-orm";
 
-function getDriver(): MailDriver {
-  const config = getMailConfig();
-
+function getDriver(config: MailConfig): MailDriver {
   switch (config.driver) {
     case "log":
       return new LogDriver();
@@ -32,6 +30,7 @@ async function isDuplicate(
   const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
 
   const conditions = [
+    sql`${emailLog.toEmails}::jsonb @> ${JSON.stringify([toEmail])}::jsonb`,
     eq(emailLog.subject, subject),
     gte(emailLog.createdAt, fiveMinutesAgo),
   ];
@@ -48,9 +47,31 @@ async function isDuplicate(
   return !!existing;
 }
 
+function buildLogEntry(
+  config: MailConfig,
+  driver: MailDriver,
+  toEmails: string[],
+  subject: string,
+  status: string,
+  options?: { orgId?: string; entityType?: string; entityId?: string },
+  result?: SendResult
+) {
+  return {
+    organizationId: options?.orgId || null,
+    driver: driver.name,
+    fromEmail: config.from.email,
+    toEmails,
+    subject,
+    status,
+    providerMessageId: result?.messageId || null,
+    error: result?.error || null,
+    entityType: options?.entityType || null,
+    entityId: options?.entityId || null,
+  };
+}
+
 /**
- * Send an email. Fire-and-forget pattern matching notify().
- * Logs to email_log table. Never throws.
+ * Send an email. Logs to email_log table. Never throws.
  *
  * Usage:
  *   await mail(
@@ -66,11 +87,10 @@ export async function mail(
 ): Promise<SendResult> {
   try {
     const config = getMailConfig();
-    const driver = getDriver();
+    const driver = getDriver(config);
     const recipients = Array.isArray(to) ? to : [to];
     const toEmails = recipients.map((r) => r.email);
 
-    // Dedup check
     const duplicate = await isDuplicate(
       toEmails[0],
       mailable.subject,
@@ -78,27 +98,19 @@ export async function mail(
     );
 
     if (duplicate) {
-      // Log the skip for audit trail
       try {
-        await db.insert(emailLog).values({
-          organizationId: options?.orgId || null,
-          driver: driver.name,
-          fromEmail: config.from.email,
-          toEmails,
-          subject: mailable.subject,
-          status: "skipped",
-          providerMessageId: null,
-          error: "Deduplicated: similar email sent within last 5 minutes",
-          entityType: options?.entityType || null,
-          entityId: options?.entityId || null,
-        });
+        await db.insert(emailLog).values(
+          buildLogEntry(config, driver, toEmails, mailable.subject, "skipped", options, {
+            success: false,
+            error: "Deduplicated: similar email sent within last 5 minutes",
+          })
+        );
       } catch (logError) {
         console.error("Failed to log skipped email:", logError);
       }
       return { success: true };
     }
 
-    // Send the email [try/catch #1]
     let result: SendResult;
     try {
       result = await driver.send(
@@ -115,20 +127,14 @@ export async function mail(
       result = { success: false, error: String(sendError) };
     }
 
-    // Log to DB [try/catch #2]
     try {
-      await db.insert(emailLog).values({
-        organizationId: options?.orgId || null,
-        driver: driver.name,
-        fromEmail: config.from.email,
-        toEmails,
-        subject: mailable.subject,
-        status: result.success ? "sent" : "failed",
-        providerMessageId: result.messageId || null,
-        error: result.error || null,
-        entityType: options?.entityType || null,
-        entityId: options?.entityId || null,
-      });
+      await db.insert(emailLog).values(
+        buildLogEntry(
+          config, driver, toEmails, mailable.subject,
+          result.success ? "sent" : "failed",
+          options, result
+        )
+      );
     } catch (logError) {
       console.error("Failed to log email:", logError);
     }

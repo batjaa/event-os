@@ -63,17 +63,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Entity has no email address — cannot create portal account" }, { status: 400 });
   }
 
-  // Get org name for email templates
-  const org = await db.query.organizations.findFirst({
-    where: eq(organizations.id, ctx.orgId),
-    columns: { name: true },
-  });
+  // Get org name (for email templates) and check for existing user in parallel
+  const [org, existing] = await Promise.all([
+    db.query.organizations.findFirst({
+      where: eq(organizations.id, ctx.orgId),
+      columns: { name: true },
+    }),
+    db.query.users.findFirst({
+      where: eq(users.email, entityEmail),
+    }),
+  ]);
   const orgName = org?.name || "your organization";
-
-  // Check if user already exists
-  const existing = await db.query.users.findFirst({
-    where: eq(users.email, entityEmail),
-  });
 
   if (existing) {
     // Check if already a stakeholder for this entity in this org

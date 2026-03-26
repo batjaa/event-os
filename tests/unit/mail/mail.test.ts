@@ -31,6 +31,7 @@ vi.mock("drizzle-orm", () => ({
   and: vi.fn((...args: unknown[]) => args),
   eq: vi.fn((a: unknown, b: unknown) => ({ op: "eq", a, b })),
   gte: vi.fn((a: unknown, b: unknown) => ({ op: "gte", a, b })),
+  sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({ op: "sql", strings, values })),
 }));
 
 import { mail } from "@/lib/mail";
