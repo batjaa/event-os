@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import { ChatPanel } from "@/components/chat-panel";
 import { ConfirmProvider } from "@/components/confirm-dialog";
+import { applyBrandColor } from "@/lib/brand";
 
-function DynamicFavicon() {
+function OrgBranding() {
   useEffect(() => {
     fetch("/api/organizations")
       .then((r) => r.json())
       .then((d) => {
-        const logoUrl = d.data?.logoUrl;
+        const { logoUrl, brandColor } = d.data || {};
         if (logoUrl) {
           let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null;
           if (!link) {
@@ -21,6 +22,7 @@ function DynamicFavicon() {
           }
           link.href = logoUrl;
         }
+        if (brandColor) applyBrandColor(brandColor);
       })
       .catch(() => {});
   }, []);
@@ -85,7 +87,7 @@ export default function DashboardLayout({
 
   return (
     <ConfirmProvider>
-    <DynamicFavicon />
+    <OrgBranding />
     <div className="min-h-screen bg-background">
       <Sidebar onToggleChat={toggleChat} chatOpen={chatOpen} />
       <main
