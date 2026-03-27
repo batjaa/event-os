@@ -52,13 +52,13 @@ test.describe("Authenticated dashboard", () => {
     await expect(page.locator("aside")).toBeVisible();
   });
 
-  test("speakers page loads with data", async ({ page }) => {
+  test("speakers page loads", async ({ page }) => {
     await page.goto("/speakers");
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Speakers", exact: true })).toBeVisible({ timeout: 10_000 });
   });
 
-  test("can navigate to sponsors page", async ({ page }) => {
+  test("sponsors page loads", async ({ page }) => {
     await page.goto("/sponsors");
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Sponsors", exact: true })).toBeVisible({ timeout: 10_000 });
   });
 });

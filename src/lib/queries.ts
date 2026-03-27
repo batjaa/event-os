@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { eq, and, desc, asc, count, sql } from "drizzle-orm";
+import { eq, and, desc, asc, count, sql, lt, ne } from "drizzle-orm";
 import * as schema from "@/db/schema";
 
 export async function getActiveIds(userOrgId?: string) {
@@ -100,7 +100,7 @@ export async function getCheckInStats() {
   const [stats] = await db
     .select({
       total: count(),
-      checkedIn: count(sql`CASE WHEN ${schema.attendees.checkedIn} = true THEN 1 END`),
+      checkedIn: count(sql`CASE WHEN ${schema.attendees.checkedIn} = 1 THEN 1 END`),
     })
     .from(schema.attendees)
     .where(eq(schema.attendees.editionId, ids.editionId));
@@ -202,7 +202,7 @@ export async function getDashboardData() {
     // Attendee check-in stats
     db.select({
       total: count(),
-      checkedIn: count(sql`CASE WHEN ${schema.attendees.checkedIn} = true THEN 1 END`),
+      checkedIn: count(sql`CASE WHEN ${schema.attendees.checkedIn} = 1 THEN 1 END`),
     }).from(schema.attendees).where(eq(schema.attendees.editionId, edId)),
     // Sessions
     db.select({ id: schema.sessions.id, type: schema.sessions.type })
@@ -221,8 +221,8 @@ export async function getDashboardData() {
       .from(schema.tasks)
       .where(and(
         eq(schema.tasks.editionId, edId),
-        sql`${schema.tasks.dueDate} < ${new Date()}`,
-        sql`${schema.tasks.status} != 'done'`,
+        lt(schema.tasks.dueDate, new Date()),
+        ne(schema.tasks.status, "done"),
       ))
       .orderBy(asc(schema.tasks.dueDate))
       .limit(5),
