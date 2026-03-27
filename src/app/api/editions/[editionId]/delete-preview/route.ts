@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
-import { eq, count } from "drizzle-orm";
+import { eq, and, count } from "drizzle-orm";
 import { requirePermission, isRbacError } from "@/lib/rbac";
 
 export async function GET(
@@ -11,6 +11,14 @@ export async function GET(
   const { editionId } = await params;
   const ctx = await requirePermission(req, "edition", "delete");
   if (isRbacError(ctx)) return ctx;
+
+  // Verify edition belongs to user's org before revealing counts
+  const edition = await db.query.eventEditions.findFirst({
+    where: and(eq(schema.eventEditions.id, editionId), eq(schema.eventEditions.organizationId, ctx.orgId)),
+  });
+  if (!edition) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   const tables = [
     { key: "speakers", label: "Speakers", table: schema.speakerApplications },
