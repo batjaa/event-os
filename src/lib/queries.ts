@@ -221,7 +221,7 @@ export async function getDashboardData() {
       .from(schema.tasks)
       .where(and(
         eq(schema.tasks.editionId, edId),
-        sql`${schema.tasks.dueDate} < ${new Date()}`,
+        sql`${schema.tasks.dueDate} < ${new Date().toISOString()}`,
         sql`${schema.tasks.status} != 'done'`,
       ))
       .orderBy(asc(schema.tasks.dueDate))
