@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { useConfirm } from "@/components/confirm-dialog";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/toast-helpers";
+import { applyBrandColor, clearBrandColor } from "@/lib/brand";
 import { Loader2 } from "lucide-react";
 
 type Org = {
@@ -46,21 +47,22 @@ export function OrganizationTab({ userRole }: { userRole: string }) {
   const [name, setName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [website, setWebsite] = useState("");
-  const [brandColor, setBrandColor] = useState("#eab308");
+  const [brandColor, setBrandColor] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
+  const savedColorRef = useRef("");
 
-  // Live-preview brand color as user picks
+  // Live-preview brand color — skip until org data has loaded
   useEffect(() => {
     if (!brandColor) return;
-    const root = document.documentElement;
-    root.style.setProperty("--primary", brandColor);
-    root.style.setProperty("--ring", brandColor);
-    root.style.setProperty("--chart-1", brandColor);
-    root.style.setProperty("--sidebar-primary", brandColor);
-    root.style.setProperty("--sidebar-accent", `${brandColor}26`);
-    root.style.setProperty("--sidebar-accent-foreground", brandColor);
-    root.style.setProperty("--sidebar-ring", brandColor);
+    applyBrandColor(brandColor);
   }, [brandColor]);
+
+  // Restore saved color if user navigates away without saving
+  useEffect(() => {
+    return () => {
+      if (savedColorRef.current) applyBrandColor(savedColorRef.current);
+    };
+  }, []);
 
   // Danger zone state
   const [members, setMembers] = useState<OrgUser[]>([]);
@@ -82,7 +84,9 @@ export function OrganizationTab({ userRole }: { userRole: string }) {
           setName(o.name);
           setContactEmail(o.contactEmail || "");
           setWebsite(o.website || "");
-          setBrandColor(o.brandColor || "#eab308");
+          const color = o.brandColor || "#eab308";
+          setBrandColor(color);
+          savedColorRef.current = color;
           setLogoUrl(o.logoUrl || "");
         }
       })
@@ -107,6 +111,7 @@ export function OrganizationTab({ userRole }: { userRole: string }) {
     if (res.ok) {
       const d = await res.json();
       setOrg(d.data);
+      savedColorRef.current = brandColor;
       toast.success(t("saved"));
     } else {
       await toastApiError(res, t("saveFailed"));

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import { ChatPanel } from "@/components/chat-panel";
 import { ConfirmProvider } from "@/components/confirm-dialog";
+import { applyBrandColor } from "@/lib/brand";
 
 function OrgBranding() {
   useEffect(() => {
@@ -12,7 +13,6 @@ function OrgBranding() {
       .then((r) => r.json())
       .then((d) => {
         const { logoUrl, brandColor } = d.data || {};
-        // Dynamic favicon
         if (logoUrl) {
           let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null;
           if (!link) {
@@ -22,17 +22,7 @@ function OrgBranding() {
           }
           link.href = logoUrl;
         }
-        // Dynamic brand color — override CSS custom properties
-        if (brandColor) {
-          const root = document.documentElement;
-          root.style.setProperty("--primary", brandColor);
-          root.style.setProperty("--ring", brandColor);
-          root.style.setProperty("--chart-1", brandColor);
-          root.style.setProperty("--sidebar-primary", brandColor);
-          root.style.setProperty("--sidebar-accent", `${brandColor}26`);
-          root.style.setProperty("--sidebar-accent-foreground", brandColor);
-          root.style.setProperty("--sidebar-ring", brandColor);
-        }
+        if (brandColor) applyBrandColor(brandColor);
       })
       .catch(() => {});
   }, []);
