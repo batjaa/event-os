@@ -10,6 +10,6 @@ export async function login(
   await page.getByRole("textbox", { name: /password/i }).fill(password);
   await page.getByRole("button", { name: /sign in/i }).click();
   await expect(
-    page.getByRole("heading", { name: "Dashboard" })
+    page.getByRole("heading", { name: /Your Events|Dashboard/i })
   ).toBeVisible({ timeout: 10_000 });
 }

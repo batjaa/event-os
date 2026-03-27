@@ -226,9 +226,9 @@ export async function getDashboardData() {
       ))
       .orderBy(asc(schema.tasks.dueDate))
       .limit(5),
-    // Recent notifications (activity feed)
+    // Recent notifications (activity feed — scoped to this edition)
     db.query.notifications.findMany({
-      where: eq(schema.notifications.organizationId, orgId),
+      where: and(eq(schema.notifications.organizationId, orgId), eq(schema.notifications.editionId, edId)),
       orderBy: desc(schema.notifications.createdAt),
       limit: 8,
     }),

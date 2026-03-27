@@ -5,6 +5,7 @@ import { getTranslations } from "next-intl/server";
 type BaseNotifyParams = {
   userId: string;
   orgId: string;
+  editionId?: string;
   type: string;
   link?: string;
   entityType?: string;
@@ -99,6 +100,7 @@ export async function notify(params: NotifyParams): Promise<void> {
     await db.insert(notifications).values({
       userId: params.userId,
       organizationId: params.orgId,
+      editionId: params.editionId || null,
       type: params.type,
       title,
       message,

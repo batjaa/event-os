@@ -708,6 +708,8 @@ export const notifications = sqliteTable(
     organizationId: uuidCol("organization_id")
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
+    editionId: uuidCol("edition_id")
+      .references(() => eventEditions.id, { onDelete: "cascade" }),
     type: text("type").notNull(),
     title: text("title").notNull(),
     message: text("message"),

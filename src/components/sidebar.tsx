@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -73,10 +73,12 @@ const topItems: NavItem[] = [
 type Edition = {
   id: string;
   name: string;
+  slug: string;
 };
 
-export function Sidebar({ onToggleChat, chatOpen }: { onToggleChat?: () => void; chatOpen?: boolean }) {
+export function Sidebar({ onToggleChat, chatOpen, basePath = "" }: { onToggleChat?: () => void; chatOpen?: boolean; basePath?: string }) {
   const pathname = usePathname();
+  const router = useRouter();
   const t = useTranslations("Nav");
   const tc = useTranslations("Common");
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -121,14 +123,18 @@ export function Sidebar({ onToggleChat, chatOpen }: { onToggleChat?: () => void;
     setMobileOpen(false);
   }, [pathname]);
 
+  // Resolve full path with basePath prefix
+  const normPath = pathname.replace(/\/$/, "") || "/";
+  const fullHref = (href: string) => href === "/" ? (basePath || "/") : `${basePath}${href}`;
+
   // Auto-expand the group that contains the active page
   useEffect(() => {
     for (const group of navGroups) {
-      if (group.items.some((item) => pathname === item.href || pathname.startsWith(item.href + "/"))) {
+      if (group.items.some((item) => normPath === fullHref(item.href) || normPath.startsWith(fullHref(item.href) + "/"))) {
         setExpandedGroups((prev) => new Set([...prev, group.key]));
       }
     }
-  }, [pathname]);
+  }, [pathname, basePath]);
 
   const toggleGroup = (label: string) => {
     setExpandedGroups((prev) => {
@@ -139,13 +145,17 @@ export function Sidebar({ onToggleChat, chatOpen }: { onToggleChat?: () => void;
     });
   };
 
-  const isActive = (href: string) =>
-    pathname === href || (href !== "/" && pathname.startsWith(href));
+  const isActive = (href: string) => {
+    const full = fullHref(href);
+    if (href === "/") return normPath === full;
+    return normPath === full || normPath.startsWith(full + "/");
+  };
 
   const navLink = (item: NavItem, indent = false) => (
     <Link
       key={item.href}
-      href={item.href}
+      href={fullHref(item.href)}
+      suppressHydrationWarning
       className={cn(
         "flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-colors",
         indent && "pl-9",
@@ -188,7 +198,12 @@ export function Sidebar({ onToggleChat, chatOpen }: { onToggleChat?: () => void;
                       });
                       setActiveEdition(ed.name);
                       setShowEditionPicker(false);
-                      window.location.reload();
+                      // Navigate to the new event's workspace
+                      if (ed.slug && basePath) {
+                        router.push(`/events/${ed.slug}`);
+                      } else {
+                        window.location.reload();
+                      }
                     }}
                     className={cn(
                       "block w-full px-3 py-1.5 text-left text-sm transition-colors",
@@ -223,7 +238,11 @@ export function Sidebar({ onToggleChat, chatOpen }: { onToggleChat?: () => void;
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({ editionId: json.data.id }),
                               });
-                              window.location.reload();
+                              if (json.data.slug) {
+                                router.push(`/events/${json.data.slug}`);
+                              } else {
+                                window.location.reload();
+                              }
                             }
                           }
                           if (e.key === "Escape") {
@@ -280,6 +299,7 @@ export function Sidebar({ onToggleChat, chatOpen }: { onToggleChat?: () => void;
             <div key={group.key} className="pt-2">
               <button
                 onClick={() => toggleGroup(group.key)}
+                suppressHydrationWarning
                 className={cn(
                   "flex w-full items-center justify-between rounded-md px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition-colors",
                   hasActive
@@ -308,7 +328,8 @@ export function Sidebar({ onToggleChat, chatOpen }: { onToggleChat?: () => void;
       {/* Bottom */}
       <div className="border-t border-stone-800 px-2 py-3 space-y-1">
         <Link
-          href="/notifications"
+          href={fullHref("/notifications")}
+          suppressHydrationWarning
           className={cn(
             "flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-colors relative",
             isActive("/notifications")
@@ -325,7 +346,8 @@ export function Sidebar({ onToggleChat, chatOpen }: { onToggleChat?: () => void;
           )}
         </Link>
         <Link
-          href="/settings"
+          href={fullHref("/settings")}
+          suppressHydrationWarning
           className={cn(
             "flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-colors",
             isActive("/settings")
@@ -397,7 +419,8 @@ export function Sidebar({ onToggleChat, chatOpen }: { onToggleChat?: () => void;
         ] as const).map((item) => (
           <Link
             key={item.href}
-            href={item.href}
+            href={fullHref(item.href)}
+            suppressHydrationWarning
             className={cn(
               "flex flex-col items-center gap-0.5 px-3 py-1 text-[10px]",
               isActive(item.href)

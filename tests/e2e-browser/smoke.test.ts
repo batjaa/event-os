@@ -48,17 +48,24 @@ test.describe("Authenticated dashboard", () => {
     await login(page);
   });
 
-  test("sidebar navigation is visible", async ({ page }) => {
-    await expect(page.locator("aside")).toBeVisible();
+  test("org home shows events", async ({ page }) => {
+    await expect(page.getByRole("heading", { name: /Your Events/i })).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("can navigate into an event", async ({ page }) => {
+    // Click the first "Open" link on the org home
+    await page.getByRole("link", { name: /open/i }).first().click();
+    await expect(page).toHaveURL(/\/events\//);
+    await expect(page.getByRole("heading", { name: /Dashboard/i })).toBeVisible({ timeout: 10_000 });
   });
 
   test("speakers page loads with data", async ({ page }) => {
-    await page.goto("/speakers");
+    await page.goto("/events/dev-summit-2026/speakers");
     await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
   });
 
   test("can navigate to sponsors page", async ({ page }) => {
-    await page.goto("/sponsors");
+    await page.goto("/events/dev-summit-2026/sponsors");
     await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
   });
 });

@@ -119,7 +119,7 @@ export const eventEditions = pgTable(
   },
   (table) => [
     index("edition_org_idx").on(table.organizationId),
-    index("edition_slug_idx").on(table.slug),
+    uniqueIndex("edition_slug_idx").on(table.slug),
   ]
 );
 
@@ -771,6 +771,8 @@ export const notifications = pgTable(
     organizationId: uuid("organization_id")
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
+    editionId: uuid("edition_id")
+      .references(() => eventEditions.id, { onDelete: "cascade" }),
     type: varchar("type", { length: 100 }).notNull(), // assignment, checklist_submitted, stage_change, comment, team_added, entity_created
     title: varchar("title", { length: 500 }).notNull(),
     message: text("message"),
