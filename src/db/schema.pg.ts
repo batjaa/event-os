@@ -29,6 +29,12 @@ export const sessionTypeEnum = pgEnum("session_type", [
   "keynote",
   "break",
   "networking",
+  "opening",
+  "closing",
+  "coffee",
+  "lunch",
+  "fireside",
+  "lightning",
 ]);
 
 export const editionStatusEnum = pgEnum("edition_status", [
@@ -100,6 +106,9 @@ export const eventEditions = pgTable(
       .notNull(),
     cfpOpen: boolean("cfp_open").default(false).notNull(),
     timezone: varchar("timezone", { length: 50 }).default("Asia/Ulaanbaatar"),
+    agendaGapMinutes: integer("agenda_gap_minutes").default(5).notNull(),
+    agendaStartTime: varchar("agenda_start_time", { length: 5 }).default("09:00"),
+    agendaEndTime: varchar("agenda_end_time", { length: 5 }).default("18:00"),
     version: integer("version").default(1).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -200,6 +209,9 @@ export const sessions = pgTable(
     room: varchar("room", { length: 255 }),
     day: integer("day").default(1).notNull(), // day number of the event
     sortOrder: integer("sort_order").default(0).notNull(),
+    hostId: uuid("host_id").references(() => users.id, { onDelete: "set null" }),
+    panelSpeakerIds: jsonb("panel_speaker_ids").$type<string[]>(),
+    durationMinutes: integer("duration_minutes").default(30).notNull(),
     version: integer("version").default(1).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -1052,6 +1064,10 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
   speaker: one(speakerApplications, {
     fields: [sessions.speakerId],
     references: [speakerApplications.id],
+  }),
+  host: one(users, {
+    fields: [sessions.hostId],
+    references: [users.id],
   }),
 }));
 

@@ -4,6 +4,7 @@ import { eq, and, sql, desc, inArray, SQL } from "drizzle-orm";
 import { ilikeFn as ilike } from "@/db/dialect";
 import { AgentIntent, DispatchResult, DrizzleTable, col } from "./types";
 import { AgentContext } from "./dispatcher";
+import { validateAgenda } from "@/lib/agenda-validator";
 
 // ─── Query Handler ───────────────────────────────────
 //
@@ -71,6 +72,7 @@ const TABLE_MAP: Record<string, { table: DrizzleTable; nameField: string; label:
   task: { table: schema.tasks, nameField: "title", label: "task", pluralLabel: "tasks" },
   campaign: { table: schema.campaigns, nameField: "title", label: "campaign", pluralLabel: "campaigns" },
   attendee: { table: schema.attendees, nameField: "name", label: "attendee", pluralLabel: "attendees" },
+  session: { table: schema.sessions, nameField: "title", label: "session", pluralLabel: "sessions" },
 };
 
 export async function handleQuery(
@@ -86,9 +88,14 @@ export async function handleQuery(
 
   if (!entityType || !TABLE_MAP[entityType]) {
     return {
-      message: `I can query: speakers, sponsors, venues, booths, volunteers, media partners, tasks, campaigns, attendees. Which one?`,
+      message: `I can query: speakers, sponsors, venues, booths, volunteers, media partners, tasks, campaigns, attendees, sessions. Which one?`,
       success: true,
     };
+  }
+
+  // Agenda validation — "any conflicts?", "check schedule", "agenda issues"
+  if (intent.action === "validate" && entityType === "session") {
+    return handleAgendaValidation(ctx);
   }
 
   // LLM-generated SQL for complex queries (joins, aggregations)
@@ -98,7 +105,6 @@ export async function handleQuery(
   }
 
   const config = TABLE_MAP[entityType];
-  const { table } = config;
 
   try {
     switch (intent.action) {
@@ -127,7 +133,7 @@ const VALID_ENUM_VALUES: Record<string, Set<string>> = {
   status: new Set(["pending", "accepted", "rejected", "waitlisted", "todo", "in_progress", "done", "blocked", "draft", "scheduled", "published", "cancelled"]),
   priority: new Set(["low", "medium", "high", "urgent"]),
   talkType: new Set(["talk", "workshop", "panel", "keynote"]),
-  type: new Set(["talk", "workshop", "panel", "keynote", "break", "networking", "tv", "online", "print", "podcast", "blog", "speaker_announcement", "sponsor_promo", "event_update", "social_post"]),
+  type: new Set(["talk", "workshop", "panel", "keynote", "break", "networking", "opening", "closing", "coffee", "lunch", "fireside", "lightning", "tv", "online", "print", "podcast", "blog", "speaker_announcement", "sponsor_promo", "event_update", "social_post"]),
   platform: new Set(["twitter", "facebook", "instagram", "linkedin", "telegram"]),
   source: new Set(["intake", "outreach", "sponsored"]),
 };
@@ -474,4 +480,91 @@ async function getChecklistStatus(
   if (submitted > 0) parts.push(`${submitted} submitted`);
   if (pending > 0) parts.push(`${pending} pending`);
   return `Checklist: ${parts.join(", ")} (${approved}/${total} complete)`;
+}
+
+// ─── AGENDA VALIDATION ──────────────────────────────────
+
+async function handleAgendaValidation(ctx: AgentContext): Promise<DispatchResult> {
+  try {
+    const allSessions = await db.query.sessions.findMany({
+      where: eq(schema.sessions.editionId, ctx.editionId),
+      with: { speaker: true, track: true },
+    });
+
+    const edition = await db.query.eventEditions.findFirst({
+      where: eq(schema.eventEditions.id, ctx.editionId),
+    });
+
+    if (!edition) {
+      return { message: "No edition found.", success: false };
+    }
+
+    if (allSessions.length === 0) {
+      return {
+        message: "No sessions in the agenda yet. Add some sessions first, then I can check for conflicts.",
+        success: true,
+        data: { issues: [] },
+      };
+    }
+
+    const allSpeakers = await db.query.speakerApplications.findMany({
+      where: eq(schema.speakerApplications.editionId, ctx.editionId),
+      columns: { id: true, name: true, stage: true },
+    });
+
+    const issues = validateAgenda(
+      allSessions,
+      {
+        gapMinutes: edition.agendaGapMinutes,
+        startTime: edition.agendaStartTime ?? "09:00",
+        endTime: edition.agendaEndTime ?? "18:00",
+        startDate: edition.startDate,
+        endDate: edition.endDate,
+      },
+      allSpeakers
+    );
+
+    if (issues.length === 0) {
+      return {
+        message: `Agenda looks good! **${allSessions.length} sessions** checked, no conflicts or issues found.`,
+        success: true,
+        data: { issues: [] },
+      };
+    }
+
+    const errors = issues.filter((i) => i.severity === "error");
+    const warnings = issues.filter((i) => i.severity === "warning");
+
+    const lines: string[] = [
+      `Found **${issues.length} issue${issues.length > 1 ? "s" : ""}** in the agenda (${allSessions.length} sessions checked):`,
+    ];
+
+    if (errors.length > 0) {
+      lines.push("");
+      lines.push(`**Errors (${errors.length}):**`);
+      for (const e of errors) {
+        lines.push(`\u274C ${e.message}`);
+      }
+    }
+
+    if (warnings.length > 0) {
+      lines.push("");
+      lines.push(`**Warnings (${warnings.length}):**`);
+      for (const w of warnings) {
+        lines.push(`\u26A0\uFE0F ${w.message}`);
+      }
+    }
+
+    return {
+      message: lines.join("\n"),
+      success: true,
+      data: { issues },
+    };
+  } catch (error) {
+    console.error("Agenda validation error:", error);
+    return {
+      message: "Failed to validate the agenda. Please try again.",
+      success: false,
+    };
+  }
 }

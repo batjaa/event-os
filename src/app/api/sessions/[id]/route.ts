@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { sessions } from "@/db/schema";
+import { sessions, eventEditions, speakerApplications } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { checkVersion } from "@/lib/api-utils";
 import { requirePermission, isRbacError } from "@/lib/rbac";
+import { validateAgenda } from "@/lib/agenda-validator";
 
 export async function PATCH(
   req: NextRequest,
@@ -32,8 +33,10 @@ export async function PATCH(
 
   const body = await req.json();
   const allowedFields = [
-    "trackId", "speakerId", "title", "description", "type",
-    "startTime", "endTime", "room", "day", "sortOrder",
+    "trackId", "speakerId", "panelSpeakerIds", "hostId",
+    "title", "description", "type",
+    "startTime", "endTime", "room", "day",
+    "durationMinutes", "sortOrder",
   ] as const;
 
   const updates: Record<string, unknown> = {};
@@ -63,7 +66,35 @@ export async function PATCH(
     return NextResponse.json({ error: "Conflict" }, { status: 409 });
   }
 
-  return NextResponse.json({ data: updated });
+  // Run validation on all sessions for this edition
+  const allSessions = await db.query.sessions.findMany({
+    where: eq(sessions.editionId, session.editionId),
+  });
+
+  const edition = await db.query.eventEditions.findFirst({
+    where: eq(eventEditions.id, session.editionId),
+  });
+
+  const allSpeakers = await db.query.speakerApplications.findMany({
+    where: eq(speakerApplications.editionId, session.editionId),
+    columns: { id: true, name: true, stage: true },
+  });
+
+  const issues = edition
+    ? validateAgenda(
+        allSessions,
+        {
+          gapMinutes: edition.agendaGapMinutes,
+          startTime: edition.agendaStartTime ?? "09:00",
+          endTime: edition.agendaEndTime ?? "18:00",
+          startDate: edition.startDate,
+          endDate: edition.endDate,
+        },
+        allSpeakers
+      )
+    : [];
+
+  return NextResponse.json({ data: updated, issues });
 }
 
 export async function DELETE(

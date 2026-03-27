@@ -94,14 +94,14 @@ async function seed() {
   // Sessions
   const acceptedSpeakers = speakers.filter((s) => s.status === "accepted");
   const sessionData = [
-    { title: "Opening Keynote", type: "keynote" as const, startTime: "2026-03-28T09:00:00", endTime: "2026-03-28T09:45:00", day: 1, trackId: mainTrack.id, speakerId: acceptedSpeakers[0]?.id },
-    { title: "Open Source in Central Asia", type: "talk" as const, startTime: "2026-03-28T10:00:00", endTime: "2026-03-28T10:30:00", day: 1, trackId: mainTrack.id, speakerId: acceptedSpeakers[1]?.id },
-    { title: "Coffee Break + Networking", type: "break" as const, startTime: "2026-03-28T10:30:00", endTime: "2026-03-28T11:00:00", day: 1, trackId: null, speakerId: null },
-    { title: "Building Scalable APIs with Go", type: "talk" as const, startTime: "2026-03-28T11:00:00", endTime: "2026-03-28T11:45:00", day: 1, trackId: mainTrack.id, speakerId: acceptedSpeakers[3]?.id },
-    { title: "Hands-on: ML Setup Workshop", type: "workshop" as const, startTime: "2026-03-28T09:00:00", endTime: "2026-03-28T12:00:00", day: 1, trackId: workshopTrack.id, speakerId: acceptedSpeakers[2]?.id },
-    { title: "Lunch Break", type: "break" as const, startTime: "2026-03-28T12:00:00", endTime: "2026-03-28T13:00:00", day: 1, trackId: null, speakerId: null },
-    { title: "From Prototype to Production", type: "talk" as const, startTime: "2026-03-28T13:00:00", endTime: "2026-03-28T13:45:00", day: 1, trackId: mainTrack.id, speakerId: acceptedSpeakers[4]?.id },
-    { title: "API Design Workshop", type: "workshop" as const, startTime: "2026-03-28T13:00:00", endTime: "2026-03-28T15:00:00", day: 1, trackId: workshopTrack.id, speakerId: null },
+    { title: "Opening Keynote", type: "keynote" as const, startTime: "2026-03-28T09:00:00", endTime: "2026-03-28T09:45:00", day: 1, trackId: mainTrack.id, speakerId: acceptedSpeakers[0]?.id, durationMinutes: 45 },
+    { title: "Open Source in Central Asia", type: "talk" as const, startTime: "2026-03-28T10:00:00", endTime: "2026-03-28T10:30:00", day: 1, trackId: mainTrack.id, speakerId: acceptedSpeakers[1]?.id, durationMinutes: 30 },
+    { title: "Coffee Break + Networking", type: "break" as const, startTime: "2026-03-28T10:30:00", endTime: "2026-03-28T11:00:00", day: 1, trackId: null, speakerId: null, durationMinutes: 15 },
+    { title: "Building Scalable APIs with Go", type: "talk" as const, startTime: "2026-03-28T11:00:00", endTime: "2026-03-28T11:45:00", day: 1, trackId: mainTrack.id, speakerId: acceptedSpeakers[3]?.id, durationMinutes: 30 },
+    { title: "Hands-on: ML Setup Workshop", type: "workshop" as const, startTime: "2026-03-28T09:00:00", endTime: "2026-03-28T12:00:00", day: 1, trackId: workshopTrack.id, speakerId: acceptedSpeakers[2]?.id, durationMinutes: 180 },
+    { title: "Lunch Break", type: "break" as const, startTime: "2026-03-28T12:00:00", endTime: "2026-03-28T13:00:00", day: 1, trackId: null, speakerId: null, durationMinutes: 15 },
+    { title: "From Prototype to Production", type: "talk" as const, startTime: "2026-03-28T13:00:00", endTime: "2026-03-28T13:45:00", day: 1, trackId: mainTrack.id, speakerId: acceptedSpeakers[4]?.id, durationMinutes: 30 },
+    { title: "API Design Workshop", type: "workshop" as const, startTime: "2026-03-28T13:00:00", endTime: "2026-03-28T15:00:00", day: 1, trackId: workshopTrack.id, speakerId: null, durationMinutes: 120 },
   ];
 
   for (const s of sessionData) {

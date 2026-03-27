@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { sessions, eventEditions } from "@/db/schema";
+import { sessions, eventEditions, speakerApplications } from "@/db/schema";
 import { eq, and, asc } from "drizzle-orm";
+import { requirePermission, isRbacError } from "@/lib/rbac";
+import { validateAgenda } from "@/lib/agenda-validator";
 
 // Public endpoint — no auth required
 export async function GET(
@@ -70,4 +72,87 @@ export async function GET(
       venue: edition.venue,
     },
   });
+}
+
+const VALID_SESSION_TYPES = [
+  "talk", "workshop", "panel", "keynote", "break", "networking",
+  "opening", "closing", "coffee", "lunch", "fireside", "lightning",
+] as const;
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ editionId: string }> }
+) {
+  const ctx = await requirePermission(req, "session", "create");
+  if (isRbacError(ctx)) return ctx;
+
+  const { editionId } = await params;
+
+  // Verify edition belongs to the user's org
+  const edition = await db.query.eventEditions.findFirst({
+    where: and(
+      eq(eventEditions.id, editionId),
+      eq(eventEditions.organizationId, ctx.orgId)
+    ),
+  });
+
+  if (!edition) {
+    return NextResponse.json({ error: "Edition not found" }, { status: 404 });
+  }
+
+  const body = await req.json();
+  const {
+    title, type, trackId, speakerId, panelSpeakerIds, hostId,
+    startTime, endTime, day, durationMinutes, room, description,
+  } = body;
+
+  if (!title) {
+    return NextResponse.json({ error: "title is required" }, { status: 400 });
+  }
+
+  const sessionType = VALID_SESSION_TYPES.includes(type) ? type : "talk";
+
+  const [created] = await db
+    .insert(sessions)
+    .values({
+      editionId,
+      organizationId: ctx.orgId,
+      title,
+      type: sessionType,
+      trackId: trackId || null,
+      speakerId: speakerId || null,
+      panelSpeakerIds: panelSpeakerIds || null,
+      hostId: hostId || null,
+      startTime: startTime ? new Date(startTime) : null,
+      endTime: endTime ? new Date(endTime) : null,
+      day: day ?? 1,
+      durationMinutes: durationMinutes ?? 30,
+      room: room || null,
+      description: description || null,
+    })
+    .returning();
+
+  // Run validation on ALL sessions for this edition
+  const allSessions = await db.query.sessions.findMany({
+    where: eq(sessions.editionId, editionId),
+  });
+
+  const allSpeakers = await db.query.speakerApplications.findMany({
+    where: eq(speakerApplications.editionId, editionId),
+    columns: { id: true, name: true, stage: true },
+  });
+
+  const issues = validateAgenda(
+    allSessions,
+    {
+      gapMinutes: edition.agendaGapMinutes,
+      startTime: edition.agendaStartTime ?? "09:00",
+      endTime: edition.agendaEndTime ?? "18:00",
+      startDate: edition.startDate,
+      endDate: edition.endDate,
+    },
+    allSpeakers
+  );
+
+  return NextResponse.json({ data: created, issues }, { status: 201 });
 }

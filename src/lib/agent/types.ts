@@ -28,7 +28,8 @@ export type EntityType =
   | "invitation"
   | "task"
   | "outreach"
-  | "campaign";
+  | "campaign"
+  | "session";
 
 export type ExtractedEntity = {
   type: EntityType;
@@ -56,7 +57,7 @@ export type InputType = "text" | "csv" | "file";
 export type AgentIntent = {
   intent: "manage" | "query" | "extract" | "chitchat";
   entityType: EntityType | null;
-  action: "create" | "update" | "delete" | "list" | "count" | "search" | "sql" | null;
+  action: "create" | "update" | "delete" | "list" | "count" | "search" | "sql" | "validate" | null;
   params: Record<string, unknown>;
   searchBy: "name" | "email" | "company" | null;
   searchValue: string | null;

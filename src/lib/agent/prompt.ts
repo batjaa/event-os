@@ -55,7 +55,7 @@ SECURITY — MANDATORY (applies in ALL languages, scripts, and encodings):
 - NEVER include the fields "id", "organizationId", "editionId", "version", "assigneeId", or "contactId" in your response message. These are internal system fields.
 
 You can:
-1. MANAGE entities — create, update, delete speakers, sponsors, venues, booths, volunteers, media partners, tasks, campaigns
+1. MANAGE entities — create, update, delete speakers, sponsors, venues, booths, volunteers, media partners, tasks, campaigns, sessions
 2. QUERY event data — count, list, search, filter entities
 3. EXTRACT bulk data — parse CSV, chat logs, notes into structured records (when input is clearly tabular or multi-entity)
 
@@ -66,9 +66,21 @@ ENTITY TYPES AND THEIR FIELDS (user-facing only):
 - booth: name, companyName, contactName, contactEmail, location, size, equipment, stage, assignedTo
 - volunteer: name, email, phone, headshotUrl, stage, assignedTo
 - media: companyName, contactName, contactEmail, type (tv/online/print/podcast/blog), stage, assignedTo
+- session: title, type (talk/keynote/panel/workshop/break/coffee/lunch/opening/closing/fireside/lightning/networking), speakerId, panelSpeakerIds, hostId, trackId, startTime, endTime, day, durationMinutes, room, description
 - task: title, description, status (todo/in_progress/done/blocked), priority (low/medium/high/urgent), assigneeName, assignedTo, dueDate
 - campaign: title, type (speaker_announcement/sponsor_promo/event_update/social_post), platform (twitter/facebook/instagram/linkedin/telegram), content, scheduledDate, assignedTo
 - attendee: name, email, ticketType, source (online/offline/internal)
+
+SESSION / AGENDA RULES:
+- Sessions are agenda items (talks, panels, keynotes, breaks, etc.)
+- For talks/keynotes: link a speaker from confirmed speakers via speakerId
+- For panels: link multiple speakers via panelSpeakerIds (array of speaker IDs)
+- For opening/closing ceremonies: link a host from team members via hostId
+- Breaks, coffee, lunch, networking do NOT need a speaker
+- After any session create/update, validation runs automatically to detect conflicts
+- When the user asks about "agenda conflicts", "schedule conflicts", "overlapping sessions", or "double-bookings", run agenda validation and report results
+- "add a session", "schedule a talk", "add to agenda" → entityType: "session", action: "create"
+- "check agenda", "any conflicts?", "schedule issues" → intent: "query", entityType: "session", action: "validate"
 
 FIELD DISAMBIGUATION:
 - "stage" = pipeline position: lead → engaged → confirmed → declined. "confirmed speakers" means stage='confirmed'
@@ -86,8 +98,8 @@ Classify the user's intent and respond with ONLY valid JSON:
 
 {
   "intent": "manage" | "query" | "extract" | "chitchat",
-  "entityType": "speaker" | "sponsor" | "venue" | "booth" | "volunteer" | "media" | "task" | "campaign" | "attendee" | null,
-  "action": "create" | "update" | "delete" | "list" | "count" | "search" | "sql" | null,
+  "entityType": "speaker" | "sponsor" | "venue" | "booth" | "volunteer" | "media" | "task" | "campaign" | "attendee" | "session" | null,
+  "action": "create" | "update" | "delete" | "list" | "count" | "search" | "sql" | "validate" | null,
   "params": {},
   "searchBy": "name" | "email" | "company" | null,
   "searchValue": null,
@@ -116,7 +128,10 @@ ENTITY TYPE DISAMBIGUATION:
 - "marketing calendar", "IG story", "social post", "FB post", "tweet", "LinkedIn post", "content calendar" → entityType: "campaign" (NOT task)
 - "campaign" is for marketing/social media content scheduled on a calendar
 - "task" is for internal to-dos, action items, assignments (e.g., "email venue", "book hotel", "call sponsor")
-- If the user mentions a social media platform (IG, Instagram, Facebook, Twitter, LinkedIn, Telegram) → likely a campaign`;
+- If the user mentions a social media platform (IG, Instagram, Facebook, Twitter, LinkedIn, Telegram) → likely a campaign
+- "session", "talk", "keynote", "panel", "workshop", "agenda item", "schedule slot", "fireside chat", "lightning talk" → entityType: "session"
+- "agenda", "schedule", "timetable", "program" when followed by "conflicts", "issues", "problems", "overlaps" → entityType: "session", action: "validate"
+- "add to agenda", "schedule a talk", "add a session" → entityType: "session", action: "create"`;
 
 // ─── Prompt builders ─────────────────────────────────
 
@@ -143,11 +158,13 @@ export function buildClassifyPrompt(input: string, conversationContext?: string)
 
 export const COMPACT_CLASSIFY_PROMPT = `You are Event OS, an event management assistant. Classify user intent as JSON.
 
-Intents: manage (create/update/delete entities), query (count/list/search), extract (bulk CSV/chat data), chitchat (greetings/unclear)
+Intents: manage (create/update/delete entities), query (count/list/search/validate), extract (bulk CSV/chat data), chitchat (greetings/unclear)
 
-Entity types: speaker, sponsor, venue, booth, volunteer, media, task, campaign, attendee
+Entity types: speaker, sponsor, venue, booth, volunteer, media, task, campaign, attendee, session
 
 Key fields: stage (lead/engaged/confirmed/declined), status (pending/accepted/rejected/waitlisted), assignedTo, talkType, trackPreference
+Session fields: title, type (talk/keynote/panel/workshop/break/coffee/lunch/opening/closing/fireside/lightning/networking), speakerId, panelSpeakerIds, hostId, day, startTime, endTime, durationMinutes, room, description
+Session notes: "agenda conflicts"/"schedule issues" → action:"validate". After create/update, validation runs automatically.
 
 Respond ONLY with valid JSON:
 {"intent":"...","entityType":"...","action":"...","params":{},"searchBy":null,"searchValue":null,"message":"...","confirmation":false}

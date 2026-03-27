@@ -5,6 +5,7 @@ import { ilikeFn as ilike } from "@/db/dialect";
 import { AgentIntent, DispatchResult, DrizzleTable, col } from "./types";
 import { AgentContext } from "./dispatcher";
 import { notify } from "@/lib/notify";
+import { validateAgenda } from "@/lib/agenda-validator";
 
 // ─── Manage Handler ──────────────────────────────────
 //
@@ -28,6 +29,7 @@ const ENTITY_CONFIG: Record<string, {
   media:     { table: schema.mediaPartners,       nameField: "companyName", label: "media partner" },
   task:      { table: schema.tasks,               nameField: "title",       label: "task" },
   campaign:  { table: schema.campaigns,           nameField: "title",       label: "campaign" },
+  session:   { table: schema.sessions,            nameField: "title",       label: "session" },
 };
 
 // ─── Dynamic schema introspection ─────────────────────
@@ -86,6 +88,7 @@ function safeDefault(fieldName: string, entityType: string, values: Record<strin
   if (fieldName.toLowerCase().includes("email")) return "";
   // Type/enum fields
   if (fieldName === "type" && entityType === "campaign") return "event_update";
+  if (fieldName === "type" && entityType === "session") return "talk";
   if (fieldName === "type") return "other";
   if (fieldName === "status" && entityType === "task") return "todo";
   if (fieldName === "priority") return "medium";
@@ -139,7 +142,7 @@ function fixStageStatusConfusion(values: Record<string, unknown>, entityType: st
 // The LLM returns dates as strings ("04/01", "2026-04-01", "April 1st").
 // Drizzle timestamp columns need Date objects.
 
-const DATE_FIELDS = new Set(["dueDate", "scheduledDate", "publishedDate"]);
+const DATE_FIELDS = new Set(["dueDate", "scheduledDate", "publishedDate", "startTime", "endTime"]);
 
 function coerceDateFields(values: Record<string, unknown>): void {
   for (const field of DATE_FIELDS) {
@@ -163,6 +166,50 @@ function coerceDateFields(values: Record<string, unknown>): void {
   }
 }
 
+// ─── Session-specific date coercion ─────────────────────
+//
+// Sessions use startTime/endTime (timestamp fields). The LLM sends
+// these as ISO strings or partial dates. We handle them specially
+// because they're not in the global DATE_FIELDS set.
+
+const SESSION_TIME_FIELDS = new Set(["startTime", "endTime"]);
+
+// ─── Agenda validation helper ────────────────────────────
+//
+// Fetches all sessions + speakers + edition config and runs validateAgenda().
+// Returns formatted issue strings for the agent response.
+
+export async function runAgendaValidation(ctx: AgentContext): Promise<string[]> {
+  const allSessions = await db.query.sessions.findMany({
+    where: eq(schema.sessions.editionId, ctx.editionId),
+  });
+
+  const edition = await db.query.eventEditions.findFirst({
+    where: eq(schema.eventEditions.id, ctx.editionId),
+  });
+
+  if (!edition) return [];
+
+  const allSpeakers = await db.query.speakerApplications.findMany({
+    where: eq(schema.speakerApplications.editionId, ctx.editionId),
+    columns: { id: true, name: true, stage: true },
+  });
+
+  const issues = validateAgenda(
+    allSessions,
+    {
+      gapMinutes: edition.agendaGapMinutes,
+      startTime: edition.agendaStartTime ?? "09:00",
+      endTime: edition.agendaEndTime ?? "18:00",
+      startDate: edition.startDate,
+      endDate: edition.endDate,
+    },
+    allSpeakers
+  );
+
+  return issues.map((i) => i.message);
+}
+
 // Field aliases — maps LLM terms to actual DB column names
 const FIELD_ALIASES: Record<string, string> = {
   company: "companyName", "company_name": "companyName",
@@ -183,22 +230,36 @@ export async function handleManage(
 ): Promise<DispatchResult> {
   const entityType = intent.entityType;
   if (!entityType || !ENTITY_CONFIG[entityType]) {
-    return { message: `I can manage: speakers, sponsors, venues, booths, volunteers, media partners, tasks, campaigns. Which one?`, success: true };
+    return { message: `I can manage: speakers, sponsors, venues, booths, volunteers, media partners, tasks, campaigns, sessions. Which one?`, success: true };
   }
 
   const config = ENTITY_CONFIG[entityType];
 
   try {
+    let result: DispatchResult;
     switch (intent.action) {
       case "create":
-        return await handleCreate(intent, ctx, config);
+        result = await handleCreate(intent, ctx, config);
+        break;
       case "update":
-        return await handleUpdate(intent, ctx, config);
+        result = await handleUpdate(intent, ctx, config);
+        break;
       case "delete":
-        return await handleDelete(intent, ctx, config);
+        result = await handleDelete(intent, ctx, config);
+        break;
       default:
-        return { message: `I can create, update, or delete ${config.label}s. What would you like to do?`, success: true };
+        result = { message: `I can create, update, or delete ${config.label}s. What would you like to do?`, success: true };
     }
+
+    // After session create/update, run agenda validation and append issues
+    if (entityType === "session" && result.success && (intent.action === "create" || intent.action === "update")) {
+      const issues = await runAgendaValidation(ctx);
+      if (issues.length > 0) {
+        result.message += "\n\n\u26A0\uFE0F Agenda issues detected:\n" + issues.map((i) => `\u2022 ${i}`).join("\n");
+      }
+    }
+
+    return result;
   } catch (error) {
     console.error("Manage handler error:", error);
     return { message: `Failed to ${intent.action} ${config.label}. Please try again.`, success: false };

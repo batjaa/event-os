@@ -1,0 +1,28 @@
+#!/bin/bash
+# Pre-push hook: run full test suite before pushing to remote
+# This catches issues that unit tests miss (SQLite compat, e2e flows)
+# Skip with: git push --no-verify
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m'
+
+echo -e "${YELLOW}Running full test suite before push...${NC}"
+
+# 1. Unit + integration tests
+echo -e "${YELLOW}[1/2] Unit & integration tests...${NC}"
+if ! npx vitest run tests/unit tests/integration 2>&1 | tail -5; then
+  echo -e "${RED}PUSH BLOCKED: Tests failed.${NC}"
+  exit 1
+fi
+
+# 2. SQLite e2e tests (catches cross-dialect issues like NOW() vs datetime())
+echo -e "${YELLOW}[2/2] SQLite e2e API tests...${NC}"
+if ! DB_DIALECT=sqlite AUTH_SECRET=test-secret SERVICE_TOKEN=test-token npx vitest run tests/e2e 2>&1 | tail -5; then
+  echo -e "${RED}PUSH BLOCKED: E2E tests failed.${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}All tests passed. Pushing...${NC}"
+exit 0

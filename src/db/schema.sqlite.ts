@@ -69,6 +69,9 @@ export const eventEditions = sqliteTable(
     agendaStatus: text("agenda_status").default("draft").notNull(),
     cfpOpen: bool("cfp_open").default(false).notNull(),
     timezone: text("timezone").default("Asia/Ulaanbaatar"),
+    agendaGapMinutes: integer("agenda_gap_minutes").default(5).notNull(),
+    agendaStartTime: text("agenda_start_time").default("09:00"),
+    agendaEndTime: text("agenda_end_time").default("18:00"),
     version: integer("version").default(1).notNull(),
     createdAt: tsNow("created_at"),
     updatedAt: tsNow("updated_at"),
@@ -160,6 +163,9 @@ export const sessions = sqliteTable(
     room: text("room"),
     day: integer("day").default(1).notNull(),
     sortOrder: integer("sort_order").default(0).notNull(),
+    hostId: uuidCol("host_id").references(() => users.id, { onDelete: "set null" }),
+    panelSpeakerIds: json("panel_speaker_ids").$type<string[]>(),
+    durationMinutes: integer("duration_minutes").default(30).notNull(),
     version: integer("version").default(1).notNull(),
     createdAt: tsNow("created_at"),
     updatedAt: tsNow("updated_at"),
@@ -993,6 +999,10 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
   speaker: one(speakerApplications, {
     fields: [sessions.speakerId],
     references: [speakerApplications.id],
+  }),
+  host: one(users, {
+    fields: [sessions.hostId],
+    references: [users.id],
   }),
 }));
 
